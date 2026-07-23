@@ -3,7 +3,11 @@ import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
 // https://vitejs.dev/config/
-export default defineConfig({
+// In production the app is served from a GitHub Pages project subpath
+// (https://<user>.github.io/JobsiteTestTracker/), so assets/SW/manifest need
+// that base. Dev/preview stays at root.
+export default defineConfig(({ command }) => ({
+  base: command === 'build' ? '/JobsiteTestTracker/' : '/',
   plugins: [
     react(),
     VitePWA({
@@ -39,4 +43,4 @@ export default defineConfig({
   ],
   // pdf.js ships an ESM worker we resolve with ?url in renderDrawing.ts
   optimizeDeps: { include: ['pdfjs-dist'] },
-});
+}));
