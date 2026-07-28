@@ -79,6 +79,24 @@ export default function ExportDialog({ pdfBytes, fileName, onClose }: Props) {
     setStatus('');
     try {
       const existing = await file.arrayBuffer();
+
+      // Empty file → almost always an iCloud/OneDrive placeholder that hasn't
+      // been downloaded to the device yet.
+      if (!existing || existing.byteLength === 0) {
+        setStatus(
+          `"${file.name}" came through empty. If it lives in OneDrive/iCloud, open it once in the Files app so it downloads, then try again.`,
+        );
+        return;
+      }
+      // Sanity check the PDF header before handing it to pdf-lib.
+      const header = new TextDecoder().decode(new Uint8Array(existing.slice(0, 5)));
+      if (!header.startsWith('%PDF')) {
+        setStatus(
+          `"${file.name}" doesn't look like a PDF. Please pick a PDF test log.`,
+        );
+        return;
+      }
+
       const merged = await appendReportToLog(existing, pdfBytes);
       const outName = file.name.replace(/\.pdf$/i, '') + ' (updated).pdf';
       const blob = bytesToBlob(merged);
@@ -87,8 +105,14 @@ export default function ExportDialog({ pdfBytes, fileName, onClose }: Props) {
       setStatus(
         `Appended this report to "${file.name}". Save the updated log back to the same OneDrive location.`,
       );
-    } catch {
-      setStatus('Could not read that PDF. Please pick a valid PDF test log.');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      const passwordProtected = /password|encrypt/i.test(msg);
+      setStatus(
+        passwordProtected
+          ? `"${file.name}" is password-protected. Remove the password (open it and re-save without protection), then try again.`
+          : `Couldn't append to "${file.name}": ${msg}`,
+      );
     } finally {
       setBusy(false);
     }
