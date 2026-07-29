@@ -58,6 +58,9 @@ export default function Home({
   const [storageMB, setStorageMB] = useState<number | null>(null);
   const [pendingRestore, setPendingRestore] = useState<BackupData | null>(null);
   const [dataNote, setDataNote] = useState('');
+  const [photosPerPage, setPhotosPerPage] = useState<number>(
+    () => Number(localStorage.getItem('qc-photosPerPage')) || 2,
+  );
 
   useEffect(() => {
     navigator.storage?.estimate?.().then((e) => {
@@ -363,6 +366,22 @@ export default function Home({
               }}
             />
           </label>
+        </div>
+        <div className="field" style={{ marginTop: 12, maxWidth: 260 }}>
+          <label>Photos per page in exported PDF</label>
+          <select
+            className="text-input"
+            value={photosPerPage}
+            onChange={(e) => {
+              const v = Number(e.target.value);
+              setPhotosPerPage(v);
+              localStorage.setItem('qc-photosPerPage', String(v));
+            }}
+          >
+            <option value={1}>1 per page (largest)</option>
+            <option value={2}>2 per page</option>
+            <option value={4}>4 per page</option>
+          </select>
         </div>
         {storageMB != null && (
           <p className="hint" style={{ marginTop: 10 }}>

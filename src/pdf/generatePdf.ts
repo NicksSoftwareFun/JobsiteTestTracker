@@ -6,8 +6,8 @@
 // Being schema-driven means custom templates render through the same path.
 
 import { PDFDocument, StandardFonts, rgb, type PDFFont } from 'pdf-lib';
-import type { CheckboxPairValue, DrawingState, Report, Template } from '../types';
-import { displayDate, displayTime } from '../utils';
+import type { CheckboxPairValue, DrawingState, PhotoItem, Report, Template } from '../types';
+import { displayDate, displayTime, normalizePhotos } from '../utils';
 import logoUrl from '../assets/warwick-logo.png';
 
 const NAVY = rgb(0.122, 0.227, 0.373);
@@ -60,12 +60,15 @@ export interface GenerateArgs {
   report: Report;
   /** each drawing page (background + markup) composited to a PNG data URL */
   drawingImages?: string[];
+  /** how many photos per page in the export (1, 2, or 4) */
+  photosPerPage?: number;
 }
 
 export async function generateReportPdf({
   template,
   report,
   drawingImages = [],
+  photosPerPage = 2,
 }: GenerateArgs): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
   const font = await doc.embedFont(StandardFonts.Helvetica);
@@ -236,12 +239,9 @@ export async function generateReportPdf({
   }
 
   // Gather attached photos up front so we can both note and render them.
-  const photos: string[] = [];
+  const photos: PhotoItem[] = [];
   for (const f of template.fields) {
-    if (f.type === 'photos') {
-      const v = report.values[f.key];
-      if (Array.isArray(v)) photos.push(...(v as string[]));
-    }
+    if (f.type === 'photos') photos.push(...normalizePhotos(report.values[f.key]));
   }
 
   // Blank drawing/photo pages are simply not added. When either is absent, note
@@ -268,7 +268,7 @@ export async function generateReportPdf({
   }
 
   // Attached photos on their own page(s).
-  if (photos.length) await addPhotoPages(doc, bold, photos);
+  if (photos.length) await addPhotoPages(doc, font, bold, photos, photosPerPage);
 
   // Footer page numbers ("1 of 3") on every page, bottom-right.
   const allPages = doc.getPages();
@@ -305,40 +305,63 @@ async function addDrawingPage(doc: PDFDocument, bold: PDFFont, dataUrl: string, 
   page.drawImage(png, { x: (pw - w) / 2, y: (ph - topPad - h) / 2, width: w, height: h });
 }
 
-/** Lay attached photos out two-per-row across portrait pages. */
-async function addPhotoPages(doc: PDFDocument, bold: PDFFont, photos: string[]) {
-  const cols = 2;
-  const gap = 16;
+/** Lay attached photos out at 1, 2, or 4 per page, with optional captions. */
+async function addPhotoPages(
+  doc: PDFDocument,
+  font: PDFFont,
+  bold: PDFFont,
+  photos: PhotoItem[],
+  photosPerPage: number,
+) {
+  const per = photosPerPage === 1 ? 1 : photosPerPage === 4 ? 4 : 2;
+  const cols = per === 4 ? 2 : 1;
+  const rows = per === 1 ? 1 : 2;
+  const gap = 18;
   const topPad = 44;
-  const cellW = (PAGE_W - MARGIN * 2 - gap) / cols;
-  const cellH = cellW; // square-ish slots
-  const perRow = cols;
-  const rowsPerPage = Math.max(1, Math.floor((PAGE_H - MARGIN - topPad) / (cellH + gap)));
-  const perPage = perRow * rowsPerPage;
+  const capH = 16; // caption strip under each photo
+  const gridW = PAGE_W - MARGIN * 2;
+  const gridH = PAGE_H - MARGIN - topPad;
+  const cellW = (gridW - gap * (cols - 1)) / cols;
+  const cellH = (gridH - gap * (rows - 1)) / rows;
 
   for (let i = 0; i < photos.length; i++) {
-    if (i % perPage === 0) {
+    if (i % per === 0) {
       const page = doc.addPage([PAGE_W, PAGE_H]);
       page.drawText('ATTACHED PHOTOS', { x: MARGIN, y: PAGE_H - 28, size: 11, font: bold, color: NAVY });
     }
     const page = doc.getPage(doc.getPageCount() - 1);
-    const idx = i % perPage;
-    const rc = idx % perRow;
-    const rr = Math.floor(idx / perRow);
-    const x = MARGIN + rc * (cellW + gap);
-    const yTop = PAGE_H - topPad - rr * (cellH + gap);
+    const idx = i % per;
+    const rc = idx % cols;
+    const rr = Math.floor(idx / cols);
+    const cellX = MARGIN + rc * (cellW + gap);
+    const cellTop = PAGE_H - topPad - rr * (cellH + gap);
+    const imgAreaH = cellH - capH;
+
+    const src = photos[i].src;
     let img;
     try {
-      img = photos[i].startsWith('data:image/png')
-        ? await doc.embedPng(photos[i])
-        : await doc.embedJpg(photos[i]);
+      img = src.startsWith('data:image/png') ? await doc.embedPng(src) : await doc.embedJpg(src);
     } catch {
       continue;
     }
-    const scale = Math.min(cellW / img.width, cellH / img.height);
+    const scale = Math.min(cellW / img.width, imgAreaH / img.height);
     const w = img.width * scale;
     const h = img.height * scale;
-    page.drawImage(img, { x: x + (cellW - w) / 2, y: yTop - h, width: w, height: h });
+    page.drawImage(img, { x: cellX + (cellW - w) / 2, y: cellTop - h, width: w, height: h });
+
+    const caption = photos[i].caption?.trim();
+    if (caption) {
+      const size = 9;
+      const text = caption.length > 90 ? caption.slice(0, 89) + '…' : caption;
+      const tw = font.widthOfTextAtSize(text, size);
+      page.drawText(text, {
+        x: cellX + Math.max(0, (cellW - tw) / 2),
+        y: cellTop - h - 13,
+        size,
+        font,
+        color: BLACK,
+      });
+    }
   }
 }
 

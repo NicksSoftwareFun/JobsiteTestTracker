@@ -1,13 +1,15 @@
 import { useRef } from 'react';
+import type { PhotoItem } from '../types';
+import { normalizePhotos } from '../utils';
 
 // Attach photos to a report: choose from the library or (on devices with a
 // camera) take one. Images are downscaled + JPEG-compressed to keep storage
 // small. On desktop/Windows without a touch camera, the "Take Photo" button is
-// greyed out.
+// greyed out. Each photo can have an optional caption.
 
 interface Props {
-  value?: string[];
-  onChange: (photos: string[]) => void;
+  value?: string[] | PhotoItem[];
+  onChange: (photos: PhotoItem[]) => void;
 }
 
 // A coarse pointer (finger) is a good proxy for a phone/tablet with a usable
@@ -42,16 +44,16 @@ function compress(file: File, maxEdge = 1600, quality = 0.8): Promise<string> {
 }
 
 export default function PhotoField({ value, onChange }: Props) {
-  const photos = value ?? [];
+  const photos: PhotoItem[] = normalizePhotos(value);
   const galleryRef = useRef<HTMLInputElement | null>(null);
   const cameraRef = useRef<HTMLInputElement | null>(null);
 
   const addFiles = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
-    const added: string[] = [];
+    const added: PhotoItem[] = [];
     for (const f of Array.from(files)) {
       try {
-        added.push(await compress(f));
+        added.push({ src: await compress(f) });
       } catch {
         /* skip unreadable image */
       }
@@ -60,6 +62,8 @@ export default function PhotoField({ value, onChange }: Props) {
   };
 
   const remove = (i: number) => onChange(photos.filter((_, idx) => idx !== i));
+  const setCaption = (i: number, caption: string) =>
+    onChange(photos.map((p, idx) => (idx === i ? { ...p, caption } : p)));
 
   return (
     <div className="field">
@@ -103,12 +107,19 @@ export default function PhotoField({ value, onChange }: Props) {
 
       {photos.length > 0 && (
         <div className="photo-grid">
-          {photos.map((src, i) => (
+          {photos.map((p, i) => (
             <div className="photo-thumb" key={i}>
-              <img src={src} alt={`Photo ${i + 1}`} />
+              <img src={p.src} alt={`Photo ${i + 1}`} />
               <button className="thumb-del" onClick={() => remove(i)} title="Remove photo">
                 ✕
               </button>
+              <input
+                type="text"
+                className="photo-caption"
+                placeholder="Caption…"
+                value={p.caption ?? ''}
+                onChange={(e) => setCaption(i, e.target.value)}
+              />
             </div>
           ))}
         </div>

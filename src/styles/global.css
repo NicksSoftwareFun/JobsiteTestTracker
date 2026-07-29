@@ -522,6 +522,15 @@ select.text-input {
   object-fit: cover;
   display: block;
 }
+.photo-caption {
+  width: 100%;
+  border: none;
+  border-top: 1px solid var(--border);
+  padding: 6px 8px;
+  font-size: 13px;
+  background: var(--card);
+  color: var(--text);
+}
 .drawing-strip {
   display: flex;
   gap: 8px;

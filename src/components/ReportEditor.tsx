@@ -218,7 +218,8 @@ export default function ReportEditor({ reportId, onBack }: Props) {
       for (const d of cur.drawings) {
         if (d.backgroundDataUrl) drawingImages.push(await compositeDrawing(d));
       }
-      const bytes = await generateReportPdf({ template, report: cur, drawingImages });
+      const photosPerPage = Number(localStorage.getItem('qc-photosPerPage')) || 2;
+      const bytes = await generateReportPdf({ template, report: cur, drawingImages, photosPerPage });
       const job = String(cur.values['jobNumber'] ?? '').trim();
       const name =
         [sanitize(template.name), job && sanitize(job), String(cur.values['date'] ?? '')]

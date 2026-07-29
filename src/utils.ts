@@ -12,6 +12,18 @@ export function downloadBlob(blob: Blob, name: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 
+/** Normalize a photos field value (string[] legacy or PhotoItem[]) to items. */
+export function normalizePhotos(v: unknown): { src: string; caption?: string }[] {
+  if (!Array.isArray(v)) return [];
+  return (v as unknown[])
+    .map((it) =>
+      typeof it === 'string'
+        ? { src: it }
+        : { src: (it as { src?: string }).src ?? '', caption: (it as { caption?: string }).caption },
+    )
+    .filter((x) => x.src);
+}
+
 export function uid(prefix = ''): string {
   return (
     prefix +

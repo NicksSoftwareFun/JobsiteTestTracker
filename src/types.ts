@@ -48,9 +48,14 @@ export interface Template {
   createdAt: number;
 }
 
-/** value shapes per field type. 'photos' fields hold an array of image data URLs. */
+/** value shapes per field type. 'photos' fields hold an array of PhotoItem
+ *  (legacy reports may still hold a plain string[] of data URLs). */
 export type CheckboxPairValue = { left: boolean; right: boolean };
-export type FieldValue = string | CheckboxPairValue | string[] | undefined;
+export interface PhotoItem {
+  src: string;
+  caption?: string;
+}
+export type FieldValue = string | CheckboxPairValue | string[] | PhotoItem[] | undefined;
 
 export interface DrawingState {
   /** stable id (used for React keys and per-page markup) */
