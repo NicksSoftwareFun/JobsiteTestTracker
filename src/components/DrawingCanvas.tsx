@@ -4,6 +4,7 @@ import {
   PencilBrush,
   Textbox,
   Line,
+  Rect,
   Triangle,
   Group,
   Point,
@@ -13,8 +14,9 @@ import {
 } from 'fabric';
 import type { DrawingState } from '../types';
 import { renderDrawingFile } from '../pdf/renderDrawing';
+import { compositeDrawing } from '../pdf/composite';
 
-type Tool = 'select' | 'highlight' | 'text' | 'arrow' | 'pan';
+type Tool = 'select' | 'highlight' | 'text' | 'arrow' | 'box' | 'erase' | 'pan';
 
 const COLORS = ['#ffd400', '#35d07f', '#ff5aa5', '#3aa0ff', '#ff4136', '#111111'];
 
@@ -62,6 +64,7 @@ export default function DrawingCanvas({ value, onChange }: Props) {
   const idRef = useRef<string>(value?.id ?? '');
   const restoringRef = useRef(false);
   const historyRef = useRef<string[]>([]);
+  const redoRef = useRef<string[]>([]);
   const fitZoomRef = useRef(1);
 
   const toolRef = useRef<Tool>('select');
@@ -91,6 +94,7 @@ export default function DrawingCanvas({ value, onChange }: Props) {
     if (!canvas || restoringRef.current) return;
     historyRef.current.push(JSON.stringify(serializeObjects(canvas)));
     if (historyRef.current.length > 40) historyRef.current.shift();
+    redoRef.current = []; // a new change invalidates the redo stack
     emitChange();
   }, [emitChange]);
 
@@ -128,9 +132,9 @@ export default function DrawingCanvas({ value, onChange }: Props) {
     }
     canvas.forEachObject((o) => {
       o.selectable = t === 'select';
-      o.evented = t === 'select';
+      o.evented = t === 'select' || t === 'erase';
     });
-    canvas.defaultCursor = t === 'pan' ? 'grab' : 'default';
+    canvas.defaultCursor = t === 'pan' ? 'grab' : t === 'erase' ? 'crosshair' : 'default';
     canvas.requestRenderAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -173,9 +177,11 @@ export default function DrawingCanvas({ value, onChange }: Props) {
     canvas.on('object:modified', pushHistory);
     canvas.on('object:removed', pushHistory);
 
-    // arrow drawing + text placement + pan
+    // arrow/box drawing + text placement + erase + pan
     let arrowStart: { x: number; y: number } | null = null;
     let tempArrow: FabricObject | null = null;
+    let boxStart: { x: number; y: number } | null = null;
+    let tempBox: Rect | null = null;
     let panning = false;
     let lastPan: { x: number; y: number } | null = null;
 
@@ -187,6 +193,25 @@ export default function DrawingCanvas({ value, onChange }: Props) {
         panning = true;
         const p = canvas.getViewportPoint(opt.e);
         lastPan = { x: p.x, y: p.y };
+        return;
+      }
+      if (t === 'erase') {
+        if (opt.target) canvas.remove(opt.target);
+        return;
+      }
+      if (t === 'box') {
+        const p = scenePoint(opt);
+        boxStart = { x: p.x, y: p.y };
+        tempBox = new Rect({
+          left: p.x,
+          top: p.y,
+          width: 0,
+          height: 0,
+          fill: 'transparent',
+          stroke: colorRef.current,
+          strokeWidth: arrowWidth(),
+        });
+        canvas.add(tempBox);
         return;
       }
       if (t === 'text' && !opt.target) {
@@ -232,6 +257,16 @@ export default function DrawingCanvas({ value, onChange }: Props) {
         (tempArrow as Line).set({ x2: p.x, y2: p.y });
         canvas.requestRenderAll();
       }
+      if (toolRef.current === 'box' && boxStart && tempBox) {
+        const p = scenePoint(opt);
+        tempBox.set({
+          left: Math.min(boxStart.x, p.x),
+          top: Math.min(boxStart.y, p.y),
+          width: Math.abs(p.x - boxStart.x),
+          height: Math.abs(p.y - boxStart.y),
+        });
+        canvas.requestRenderAll();
+      }
     });
 
     canvas.on('mouse:up', (opt) => {
@@ -259,6 +294,13 @@ export default function DrawingCanvas({ value, onChange }: Props) {
           canvas.add(arrow);
         }
         arrowStart = null;
+      }
+      if (toolRef.current === 'box' && boxStart) {
+        if (tempBox && (tempBox.width < 5 || tempBox.height < 5)) {
+          canvas.remove(tempBox);
+        }
+        tempBox = null;
+        boxStart = null;
       }
     });
 
@@ -378,18 +420,69 @@ export default function DrawingCanvas({ value, onChange }: Props) {
     canvas.requestRenderAll();
   };
 
-  const undo = () => {
+  const loadState = (state: string) => {
     const canvas = fabricRef.current;
-    if (!canvas || historyRef.current.length <= 1) return;
+    if (!canvas) return;
     restoringRef.current = true;
-    historyRef.current.pop();
-    const prev = historyRef.current[historyRef.current.length - 1];
-    void canvas.loadFromJSON(JSON.parse(prev)).then(() => {
+    void canvas.loadFromJSON(JSON.parse(state)).then(() => {
       canvas.requestRenderAll();
       restoringRef.current = false;
       applyToolState();
       emitChange();
     });
+  };
+
+  const undo = () => {
+    if (historyRef.current.length <= 1) return;
+    const current = historyRef.current.pop()!;
+    redoRef.current.push(current);
+    loadState(historyRef.current[historyRef.current.length - 1]);
+  };
+
+  const redo = () => {
+    if (redoRef.current.length === 0) return;
+    const state = redoRef.current.pop()!;
+    historyRef.current.push(state);
+    loadState(state);
+  };
+
+  // Flatten current markup into the background, rotate the page 90°, and start
+  // fresh markup on the rotated image (handles sideways scans).
+  const rotatePage = async () => {
+    const canvas = fabricRef.current;
+    if (!canvas || !bgDataUrlRef.current) return;
+    const flat = await compositeDrawing({
+      id: idRef.current,
+      backgroundDataUrl: bgDataUrlRef.current,
+      bgWidth: bgSizeRef.current.w,
+      bgHeight: bgSizeRef.current.h,
+      fabricJson: serializeObjects(canvas),
+    });
+    const img = new Image();
+    await new Promise((res, rej) => {
+      img.onload = res;
+      img.onerror = rej;
+      img.src = flat;
+    });
+    const oc = document.createElement('canvas');
+    oc.width = img.height;
+    oc.height = img.width;
+    const ctx = oc.getContext('2d')!;
+    ctx.translate(oc.width / 2, oc.height / 2);
+    ctx.rotate(Math.PI / 2);
+    ctx.drawImage(img, -img.width / 2, -img.height / 2);
+    const rotated = oc.toDataURL('image/png');
+
+    canvas.remove(...canvas.getObjects());
+    bgSizeRef.current = { w: oc.width, h: oc.height };
+    bgDataUrlRef.current = rotated;
+    const bg = await FabricImage.fromURL(rotated);
+    bg.set({ selectable: false, evented: false });
+    canvas.backgroundImage = bg;
+    fitToScreen();
+    historyRef.current = [JSON.stringify(serializeObjects(canvas))];
+    redoRef.current = [];
+    emitChange();
   };
 
   const loadDrawingFile = async (file: File) => {
@@ -423,6 +516,8 @@ export default function DrawingCanvas({ value, onChange }: Props) {
         <ToolButton label="🖍 Highlight" active={tool === 'highlight'} onClick={() => setToolAndRefs('highlight')} />
         <ToolButton label="🔤 Text" active={tool === 'text'} onClick={() => setToolAndRefs('text')} />
         <ToolButton label="➜ Arrow" active={tool === 'arrow'} onClick={() => setToolAndRefs('arrow')} />
+        <ToolButton label="▭ Box" active={tool === 'box'} onClick={() => setToolAndRefs('box')} />
+        <ToolButton label="🩹 Eraser" active={tool === 'erase'} onClick={() => setToolAndRefs('erase')} />
         <span className="tool-sep" />
         {COLORS.map((c) => (
           <button
@@ -450,8 +545,10 @@ export default function DrawingCanvas({ value, onChange }: Props) {
         <ToolButton label="＋" onClick={() => zoomBy(1.25)} title="Zoom in" />
         <ToolButton label="－" onClick={() => zoomBy(0.8)} title="Zoom out" />
         <ToolButton label="⤢ Fit" onClick={fitToScreen} />
+        <ToolButton label="⟳ Rotate" onClick={() => void rotatePage()} title="Rotate page 90°" />
         <span className="tool-sep" />
         <ToolButton label="↶ Undo" onClick={undo} />
+        <ToolButton label="↷ Redo" onClick={redo} />
         <ToolButton label="🗑 Delete" onClick={deleteActive} />
       </div>
       <div className="canvas-holder" ref={holderRef}>
