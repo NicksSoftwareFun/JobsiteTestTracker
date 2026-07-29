@@ -80,6 +80,7 @@ export default function App() {
       templateName: template.name,
       projectId: null,
       title: template.name,
+      reportTitle: '',
       values,
       drawings,
       createdAt: Date.now(),

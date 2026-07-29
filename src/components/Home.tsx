@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Project, Report, SavedDrawing, Template } from '../types';
-import { displayDate, downloadBlob, uid } from '../utils';
+import { displayDate, downloadBlob, reportDisplayName, uid } from '../utils';
 import {
   deleteSavedDrawing,
   exportAllData,
@@ -133,6 +133,7 @@ export default function Home({
       if (!q) return true;
       const hay = [
         r.templateName,
+        r.reportTitle ?? '',
         String(r.values['jobNumber'] ?? ''),
         String(r.values['location'] ?? ''),
         displayDate(String(r.values['date'] ?? '')),
@@ -162,10 +163,7 @@ export default function Home({
   const reportRow = (r: Report) => (
     <div className="list-item" key={r.id}>
       <div className="meta" onClick={() => onOpen(r.id)} style={{ cursor: 'pointer' }}>
-        <div className="name">
-          {r.templateName}
-          {r.values['jobNumber'] ? ` — Job ${String(r.values['jobNumber'])}` : ''}
-        </div>
+        <div className="name">{reportDisplayName(r.templateName, r.reportTitle)}</div>
         <div className="sub">
           {displayDate(String(r.values['date'] ?? '')) || new Date(r.updatedAt).toLocaleDateString()}
           {r.projectId ? ` · ${projectName(r.projectId)}` : ''}

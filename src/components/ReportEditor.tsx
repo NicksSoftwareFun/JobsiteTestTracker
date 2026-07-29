@@ -9,7 +9,7 @@ import {
   saveReport,
 } from '../db';
 import { getTemplateById } from '../templates';
-import { uid } from '../utils';
+import { reportDisplayName, safeFileName, uid } from '../utils';
 import { compositeDrawing } from '../pdf/composite';
 import { generateReportPdf } from '../pdf/generatePdf';
 import FormFields from './FormFields';
@@ -27,10 +27,6 @@ function normalizeDrawings(r: Report): DrawingState[] {
 interface Props {
   reportId: string;
   onBack: () => void;
-}
-
-function sanitize(s: string) {
-  return s.replace(/[^\w\-]+/g, '_').replace(/^_|_$/g, '');
 }
 
 export default function ReportEditor({ reportId, onBack }: Props) {
@@ -91,6 +87,12 @@ export default function ReportEditor({ reportId, onBack }: Props) {
     const cur = reportRef.current;
     if (!cur) return;
     persist({ ...cur, values: { ...cur.values, [key]: value }, updatedAt: Date.now() });
+  };
+
+  const setReportTitle = (reportTitle: string) => {
+    const cur = reportRef.current;
+    if (!cur) return;
+    persist({ ...cur, reportTitle, updatedAt: Date.now() });
   };
 
   // Called by DrawingCanvas as the active page's markup/background changes.
@@ -220,11 +222,7 @@ export default function ReportEditor({ reportId, onBack }: Props) {
       }
       const photosPerPage = Number(localStorage.getItem('qc-photosPerPage')) || 2;
       const bytes = await generateReportPdf({ template, report: cur, drawingImages, photosPerPage });
-      const job = String(cur.values['jobNumber'] ?? '').trim();
-      const name =
-        [sanitize(template.name), job && sanitize(job), String(cur.values['date'] ?? '')]
-          .filter(Boolean)
-          .join('_') + '.pdf';
+      const name = safeFileName(reportDisplayName(template.name, cur.reportTitle)) + '.pdf';
       setExportState({ bytes, name });
     } finally {
       setGenerating(false);
@@ -254,7 +252,19 @@ export default function ReportEditor({ reportId, onBack }: Props) {
         </button>
       </div>
 
-      <h2 style={{ margin: '4px 0 12px' }}>{template.name}</h2>
+      <div className="field" style={{ margin: '4px 0 12px' }}>
+        <label>Report title</label>
+        <div className="row" style={{ alignItems: 'center', gap: 8, flexWrap: 'nowrap' }}>
+          <span style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{template.name} -</span>
+          <input
+            type="text"
+            style={{ flex: 1 }}
+            placeholder="e.g. HHW M301.A"
+            value={report.reportTitle ?? ''}
+            onChange={(e) => setReportTitle(e.target.value)}
+          />
+        </div>
+      </div>
 
       {/* Project selector + admin autofill */}
       <div className="card">

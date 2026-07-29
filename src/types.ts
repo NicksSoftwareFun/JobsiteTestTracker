@@ -87,6 +87,8 @@ export interface Report {
   projectId: string | null;
   title: string;
   values: Record<string, FieldValue>;
+  /** user-editable title suffix; display = "<templateName> - <reportTitle>" */
+  reportTitle?: string;
   /** one or more markup-able drawing pages */
   drawings: DrawingState[];
   /** legacy single-drawing field (migrated into `drawings` on load) */

@@ -7,7 +7,7 @@
 
 import { PDFDocument, StandardFonts, rgb, type PDFFont } from 'pdf-lib';
 import type { CheckboxPairValue, DrawingState, PhotoItem, Report, Template } from '../types';
-import { displayDate, displayTime, normalizePhotos } from '../utils';
+import { displayDate, displayTime, normalizePhotos, reportDisplayName } from '../utils';
 import logoUrl from '../assets/warwick-logo.png';
 
 const NAVY = rgb(0.122, 0.227, 0.373);
@@ -96,7 +96,8 @@ export async function generateReportPdf({
   } catch {
     /* logo optional */
   }
-  page.drawText(template.name.toUpperCase(), { x: MARGIN, y, size: 13, font: bold, color: BLACK });
+  const heading = reportDisplayName(template.name, report.reportTitle).toUpperCase();
+  page.drawText(heading, { x: MARGIN, y, size: 13, font: bold, color: BLACK });
   y -= 22;
 
   // --- Two-column layout engine ---

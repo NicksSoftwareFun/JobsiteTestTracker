@@ -12,6 +12,17 @@ export function downloadBlob(blob: Blob, name: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 
+/** Display name for a report: "<template> - <title>" (title optional). */
+export function reportDisplayName(templateName: string, reportTitle?: string): string {
+  const t = reportTitle?.trim();
+  return t ? `${templateName} - ${t}` : templateName;
+}
+
+/** Strip characters that are illegal in filenames, keeping spaces/dots/dashes. */
+export function safeFileName(s: string): string {
+  return s.replace(/[/\\?%*:|"<>]/g, '-').replace(/\s+/g, ' ').trim();
+}
+
 /** Normalize a photos field value (string[] legacy or PhotoItem[]) to items. */
 export function normalizePhotos(v: unknown): { src: string; caption?: string }[] {
   if (!Array.isArray(v)) return [];
