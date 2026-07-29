@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { Report, Template } from './types';
+import type { Report, SavedDrawing, Template } from './types';
 import {
   deleteReport as dbDeleteReport,
   deleteTemplate as dbDeleteTemplate,
   getReports,
+  getSavedDrawings,
   saveReport,
   saveTemplate,
 } from './db';
@@ -23,6 +24,7 @@ export default function App() {
   const [view, setView] = useState<View>({ name: 'home' });
   const [reports, setReports] = useState<Report[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
+  const [savedDrawings, setSavedDrawings] = useState<SavedDrawing[]>([]);
   const [theme, setTheme] = useState<Theme>(
     () => (localStorage.getItem('qc-theme') as Theme) || 'light',
   );
@@ -35,6 +37,7 @@ export default function App() {
   const refresh = useCallback(async () => {
     setReports(await getReports());
     setTemplates(await getAllTemplates());
+    setSavedDrawings(await getSavedDrawings());
   }, []);
 
   useEffect(() => {
@@ -125,11 +128,13 @@ export default function App() {
         <Home
           reports={reports}
           templates={templates}
+          savedDrawings={savedDrawings}
           onOpen={(id) => setView({ name: 'editor', reportId: id })}
           onNewReport={newReport}
           onNewTemplate={() => setView({ name: 'builder' })}
           onDeleteReport={handleDeleteReport}
           onDeleteTemplate={handleDeleteTemplate}
+          onSavedDrawingsChanged={refresh}
         />
       )}
 

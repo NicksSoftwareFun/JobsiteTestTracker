@@ -1,28 +1,62 @@
 import { useState } from 'react';
-import type { Report, Template } from '../types';
-import { displayDate } from '../utils';
+import type { Report, SavedDrawing, Template } from '../types';
+import { displayDate, uid } from '../utils';
+import { deleteSavedDrawing, saveDrawing } from '../db';
+import { renderDrawingFile } from '../pdf/renderDrawing';
+import PdfPagePicker from './PdfPagePicker';
 import logoUrl from '../assets/warwick-logo.png';
 
 interface Props {
   reports: Report[];
   templates: Template[];
+  savedDrawings: SavedDrawing[];
   onOpen: (id: string) => void;
   onNewReport: (templateId: string) => void;
   onNewTemplate: () => void;
   onDeleteReport: (id: string) => void;
   onDeleteTemplate: (id: string) => void;
+  onSavedDrawingsChanged: () => void;
 }
 
 export default function Home({
   reports,
   templates,
+  savedDrawings,
   onOpen,
   onNewReport,
   onNewTemplate,
   onDeleteReport,
   onDeleteTemplate,
+  onSavedDrawingsChanged,
 }: Props) {
   const [picking, setPicking] = useState(false);
+  const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const onUploadFile = async (file: File) => {
+    const isPdf =
+      file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+    if (isPdf) {
+      setPdfFile(file); // open the page picker
+      return;
+    }
+    // image → save directly as one drawing
+    setBusy(true);
+    try {
+      const r = await renderDrawingFile(file);
+      await saveDrawing({
+        id: uid('sd_'),
+        name: file.name.replace(/\.[^.]+$/, ''),
+        backgroundDataUrl: r.dataUrl,
+        bgWidth: r.width,
+        bgHeight: r.height,
+        createdAt: Date.now(),
+      });
+      onSavedDrawingsChanged();
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <div className="content">
@@ -99,6 +133,76 @@ export default function Home({
           </div>
         ))}
       </div>
+
+      {/* Saved drawings library */}
+      <div className="card">
+        <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+          <h3 style={{ margin: 0 }}>Saved Drawings</h3>
+          <label className={`btn sm navy${busy ? ' disabled' : ''}`}>
+            {busy ? 'Uploading…' : '+ Upload drawings'}
+            <input
+              type="file"
+              accept="application/pdf,image/*"
+              style={{ display: 'none' }}
+              disabled={busy}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void onUploadFile(f);
+                e.currentTarget.value = '';
+              }}
+            />
+          </label>
+        </div>
+        {savedDrawings.length === 0 ? (
+          <p className="hint" style={{ marginTop: 10 }}>
+            No saved drawings yet. Upload a PDF (pick pages) or an image — saved pages
+            can be added to any report.
+          </p>
+        ) : (
+          <div className="page-grid" style={{ marginTop: 12 }}>
+            {savedDrawings.map((d) => (
+              <div key={d.id} className="page-thumb">
+                <img src={d.backgroundDataUrl} alt={d.name} />
+                <span className="page-num">{d.name}</span>
+                <button
+                  className="thumb-del"
+                  title="Delete from library"
+                  onClick={async () => {
+                    if (confirm(`Delete "${d.name}" from saved drawings?`)) {
+                      await deleteSavedDrawing(d.id);
+                      onSavedDrawingsChanged();
+                    }
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {pdfFile && (
+        <PdfPagePicker
+          file={pdfFile}
+          onCancel={() => setPdfFile(null)}
+          onConfirm={async (pages) => {
+            const base = pdfFile.name.replace(/\.pdf$/i, '');
+            setPdfFile(null);
+            for (const p of pages) {
+              await saveDrawing({
+                id: uid('sd_'),
+                name: `${base} (p${p.pageNumber})`,
+                backgroundDataUrl: p.dataUrl,
+                bgWidth: p.width,
+                bgHeight: p.height,
+                createdAt: Date.now(),
+              });
+            }
+            onSavedDrawingsChanged();
+          }}
+        />
+      )}
 
       {picking && (
         <div className="modal-backdrop" onClick={() => setPicking(false)}>
