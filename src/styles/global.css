@@ -412,6 +412,140 @@ select.text-input {
   white-space: nowrap;
 }
 
+/* --- PDF page picker / saved drawings / photo grids --- */
+.modal.modal-wide {
+  max-width: 900px;
+}
+.page-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 10px;
+  max-height: 58vh;
+  overflow-y: auto;
+  padding: 4px;
+}
+.page-thumb {
+  position: relative;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  padding: 0;
+  overflow: hidden;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.page-thumb.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent);
+}
+.page-thumb img {
+  width: 100%;
+  height: 150px;
+  object-fit: contain;
+  background: #fff;
+  display: block;
+}
+.page-thumb .page-num {
+  font-size: 12px;
+  padding: 4px 2px;
+  color: var(--muted);
+  text-align: center;
+  width: 100%;
+}
+.thumb-hit {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  width: 100%;
+}
+.page-check {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  background: var(--accent);
+  color: #fff;
+  border-radius: 999px;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+}
+.thumb-del {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  border: none;
+  background: rgba(192, 57, 43, 0.92);
+  color: #fff;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+}
+.photo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+.photo-thumb {
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.photo-thumb img {
+  width: 100%;
+  height: 110px;
+  object-fit: cover;
+  display: block;
+}
+.drawing-strip {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+  margin-bottom: 10px;
+}
+.strip-thumb {
+  position: relative;
+  flex: 0 0 auto;
+  width: 96px;
+  height: 74px;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fff;
+  cursor: pointer;
+}
+.strip-thumb.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent);
+}
+.strip-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #fff;
+}
+.strip-num {
+  position: absolute;
+  bottom: 2px;
+  left: 4px;
+  font-size: 11px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  padding: 0 5px;
+  border-radius: 6px;
+}
+
 /* ============================================================
    Dark mode — dark grey surfaces with orange + yellow accents.
    The whole app reads from these CSS variables, so re-pointing

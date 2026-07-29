@@ -58,13 +58,14 @@ function displayValue(type: string, value: unknown): string {
 export interface GenerateArgs {
   template: Template;
   report: Report;
-  drawingImageDataUrl?: string | null;
+  /** each drawing page (background + markup) composited to a PNG data URL */
+  drawingImages?: string[];
 }
 
 export async function generateReportPdf({
   template,
   report,
-  drawingImageDataUrl,
+  drawingImages = [],
 }: GenerateArgs): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
   const font = await doc.embedFont(StandardFonts.Helvetica);
@@ -218,6 +219,14 @@ export async function generateReportPdf({
             });
           });
           break;
+        case 'photos': {
+          // Photos render on their own page(s) at the end; note the count here.
+          const n = Array.isArray(raw) ? raw.length : 0;
+          cell(SIMPLE_H, (x, top, w) =>
+            labeledCell(x, top, w, field.label, n ? `${n} photo${n === 1 ? '' : 's'} attached (see end)` : 'None'),
+          );
+          break;
+        }
         default:
           cell(SIMPLE_H, (x, top, w) => labeledCell(x, top, w, field.label, displayValue(field.type, raw)));
       }
@@ -226,27 +235,79 @@ export async function generateReportPdf({
     y -= 6;
   }
 
-  if (drawingImageDataUrl) {
-    await addDrawingPage(doc, bold, drawingImageDataUrl);
+  // One page per marked-up drawing.
+  for (let i = 0; i < drawingImages.length; i++) {
+    const label =
+      drawingImages.length > 1
+        ? `TESTED AREA — MARKED-UP DRAWING (${i + 1} of ${drawingImages.length})`
+        : 'TESTED AREA — MARKED-UP DRAWING';
+    await addDrawingPage(doc, bold, drawingImages[i], label);
   }
+
+  // Attached photos (from any 'photos' field) on their own page(s).
+  const photos: string[] = [];
+  for (const f of template.fields) {
+    if (f.type === 'photos') {
+      const v = report.values[f.key];
+      if (Array.isArray(v)) photos.push(...(v as string[]));
+    }
+  }
+  if (photos.length) await addPhotoPages(doc, bold, photos);
 
   return doc.save();
 }
 
-async function addDrawingPage(doc: PDFDocument, bold: PDFFont, dataUrl: string) {
+async function addDrawingPage(doc: PDFDocument, bold: PDFFont, dataUrl: string, label: string) {
   const png = await doc.embedPng(dataUrl);
   const landscape = png.width >= png.height;
   const pw = landscape ? PAGE_H : PAGE_W;
   const ph = landscape ? PAGE_W : PAGE_H;
   const page = doc.addPage([pw, ph]);
   const topPad = 40;
-  page.drawText('TESTED AREA — MARKED-UP DRAWING', { x: MARGIN, y: ph - 28, size: 11, font: bold, color: NAVY });
+  page.drawText(label, { x: MARGIN, y: ph - 28, size: 11, font: bold, color: NAVY });
   const availW = pw - MARGIN * 2;
   const availH = ph - MARGIN - topPad;
   const scale = Math.min(availW / png.width, availH / png.height);
   const w = png.width * scale;
   const h = png.height * scale;
   page.drawImage(png, { x: (pw - w) / 2, y: (ph - topPad - h) / 2, width: w, height: h });
+}
+
+/** Lay attached photos out two-per-row across portrait pages. */
+async function addPhotoPages(doc: PDFDocument, bold: PDFFont, photos: string[]) {
+  const cols = 2;
+  const gap = 16;
+  const topPad = 44;
+  const cellW = (PAGE_W - MARGIN * 2 - gap) / cols;
+  const cellH = cellW; // square-ish slots
+  const perRow = cols;
+  const rowsPerPage = Math.max(1, Math.floor((PAGE_H - MARGIN - topPad) / (cellH + gap)));
+  const perPage = perRow * rowsPerPage;
+
+  for (let i = 0; i < photos.length; i++) {
+    if (i % perPage === 0) {
+      const page = doc.addPage([PAGE_W, PAGE_H]);
+      page.drawText('ATTACHED PHOTOS', { x: MARGIN, y: PAGE_H - 28, size: 11, font: bold, color: NAVY });
+    }
+    const page = doc.getPage(doc.getPageCount() - 1);
+    const idx = i % perPage;
+    const rc = idx % perRow;
+    const rr = Math.floor(idx / perRow);
+    const x = MARGIN + rc * (cellW + gap);
+    const yTop = PAGE_H - topPad - rr * (cellH + gap);
+    let img;
+    try {
+      img = photos[i].startsWith('data:image/png')
+        ? await doc.embedPng(photos[i])
+        : await doc.embedJpg(photos[i]);
+    } catch {
+      continue;
+    }
+    const scale = Math.min(cellW / img.width, cellH / img.height);
+    const w = img.width * scale;
+    const h = img.height * scale;
+    page.drawImage(img, { x: x + (cellW - w) / 2, y: yTop - h, width: w, height: h });
+  }
 }
 
 export function drawingHasContent(d: DrawingState | null | undefined): boolean {

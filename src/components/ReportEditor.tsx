@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { FieldValue, Project, Report, Template } from '../types';
+import type { DrawingState, FieldValue, Project, Report, SavedDrawing, Template } from '../types';
 import {
   getProject,
   getProjects,
   getReport,
+  saveDrawing,
   saveProject,
   saveReport,
 } from '../db';
@@ -14,6 +15,14 @@ import { generateReportPdf } from '../pdf/generatePdf';
 import FormFields from './FormFields';
 import DrawingCanvas from './DrawingCanvas';
 import ExportDialog from './ExportDialog';
+import PdfPagePicker, { type SelectedPage } from './PdfPagePicker';
+import SavedDrawingsPicker from './SavedDrawingsPicker';
+
+/** Migrate legacy single `drawing` into the `drawings` array; ensure ids. */
+function normalizeDrawings(r: Report): DrawingState[] {
+  const list = r.drawings ?? (r.drawing ? [r.drawing] : []);
+  return list.map((d) => ({ ...d, id: d.id || uid('dr_') }));
+}
 
 interface Props {
   reportId: string;
@@ -32,18 +41,28 @@ export default function ReportEditor({ reportId, onBack }: Props) {
   const [savedNote, setSavedNote] = useState('');
   const [exportState, setExportState] = useState<{ bytes: Uint8Array; name: string } | null>(null);
   const [generating, setGenerating] = useState(false);
+  const [activeIdx, setActiveIdx] = useState(0);
+  const [pdfPickerFile, setPdfPickerFile] = useState<File | null>(null);
+  const [showLibrary, setShowLibrary] = useState(false);
   const saveTimer = useRef<number | undefined>(undefined);
   // Always-current report, so callbacks captured by children (e.g. the drawing
   // canvas's fabric event listeners, bound once at mount) merge into the latest
   // state instead of an old closure.
   const reportRef = useRef<Report | null>(null);
+  const activeIdxRef = useRef(0);
+  useEffect(() => {
+    activeIdxRef.current = activeIdx;
+  }, [activeIdx]);
 
   useEffect(() => {
     void (async () => {
       const r = await getReport(reportId);
       if (!r) return;
-      reportRef.current = r;
-      setReport(r);
+      // migrate legacy single drawing → drawings array
+      const normalized: Report = { ...r, drawings: normalizeDrawings(r), drawing: null };
+      reportRef.current = normalized;
+      setReport(normalized);
+      setActiveIdx(0);
       setTemplate((await getTemplateById(r.templateId)) ?? null);
       setProjects(await getProjects());
       if (r.projectId) {
@@ -73,10 +92,66 @@ export default function ReportEditor({ reportId, onBack }: Props) {
     persist({ ...cur, values: { ...cur.values, [key]: value }, updatedAt: Date.now() });
   };
 
-  const setDrawing = (drawing: Report['drawing']) => {
+  // Called by DrawingCanvas as the active page's markup/background changes.
+  const updateActiveDrawing = (d: DrawingState) => {
     const cur = reportRef.current;
     if (!cur) return;
-    persist({ ...cur, drawing, updatedAt: Date.now() });
+    const drawings = cur.drawings.map((existing, i) =>
+      i === activeIdxRef.current ? { ...d, id: existing.id, name: existing.name } : existing,
+    );
+    persist({ ...cur, drawings, updatedAt: Date.now() });
+  };
+
+  // Append rendered PDF pages as new drawings + save each to the reusable library.
+  const addPages = async (pages: SelectedPage[], baseName: string) => {
+    const cur = reportRef.current;
+    if (!cur) return;
+    const newDrawings: DrawingState[] = pages.map((p) => ({
+      id: uid('dr_'),
+      name: `${baseName} (p${p.pageNumber})`,
+      backgroundDataUrl: p.dataUrl,
+      bgWidth: p.width,
+      bgHeight: p.height,
+      fabricJson: null,
+    }));
+    for (const p of pages) {
+      const sd: SavedDrawing = {
+        id: uid('sd_'),
+        name: `${baseName} (p${p.pageNumber})`,
+        backgroundDataUrl: p.dataUrl,
+        bgWidth: p.width,
+        bgHeight: p.height,
+        createdAt: Date.now(),
+      };
+      await saveDrawing(sd);
+    }
+    const drawings = [...cur.drawings, ...newDrawings];
+    persist({ ...cur, drawings, updatedAt: Date.now() });
+    setActiveIdx(drawings.length - newDrawings.length);
+  };
+
+  const addSavedDrawings = (saved: SavedDrawing[]) => {
+    const cur = reportRef.current;
+    if (!cur) return;
+    const newDrawings: DrawingState[] = saved.map((s) => ({
+      id: uid('dr_'),
+      name: s.name,
+      backgroundDataUrl: s.backgroundDataUrl,
+      bgWidth: s.bgWidth,
+      bgHeight: s.bgHeight,
+      fabricJson: null,
+    }));
+    const drawings = [...cur.drawings, ...newDrawings];
+    persist({ ...cur, drawings, updatedAt: Date.now() });
+    setActiveIdx(drawings.length - newDrawings.length);
+  };
+
+  const removeDrawing = (i: number) => {
+    const cur = reportRef.current;
+    if (!cur) return;
+    const drawings = cur.drawings.filter((_, idx) => idx !== i);
+    persist({ ...cur, drawings, updatedAt: Date.now() });
+    setActiveIdx((a) => Math.max(0, Math.min(a, drawings.length - 1)));
   };
 
   const applyProjectAdmin = async (p: Project) => {
@@ -123,10 +198,12 @@ export default function ReportEditor({ reportId, onBack }: Props) {
     setGenerating(true);
     try {
       await saveReport(cur);
-      const drawingImageDataUrl = cur.drawing?.backgroundDataUrl
-        ? await compositeDrawing(cur.drawing)
-        : null;
-      const bytes = await generateReportPdf({ template, report: cur, drawingImageDataUrl });
+      // Composite each drawing page (background + markup) to a flat image.
+      const drawingImages: string[] = [];
+      for (const d of cur.drawings) {
+        if (d.backgroundDataUrl) drawingImages.push(await compositeDrawing(d));
+      }
+      const bytes = await generateReportPdf({ template, report: cur, drawingImages });
       const job = String(cur.values['jobNumber'] ?? '').trim();
       const name =
         [sanitize(template.name), job && sanitize(job), String(cur.values['date'] ?? '')]
@@ -216,11 +293,95 @@ export default function ReportEditor({ reportId, onBack }: Props) {
       {/* Schema-driven form */}
       <FormFields template={template} values={report.values} onChange={setValue} />
 
-      {/* Drawing markup */}
+      {/* Drawing markup — one or more pages */}
       <div className="card">
-        <div className="section-title">Tested Area — Drawing Markup</div>
-        <DrawingCanvas value={report.drawing} onChange={setDrawing} />
+        <div className="section-title">Tested Area — Drawings</div>
+
+        <div className="row" style={{ marginBottom: 10 }}>
+          <label className="btn sm navy">
+            + Add pages from PDF
+            <input
+              type="file"
+              accept="application/pdf"
+              style={{ display: 'none' }}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) setPdfPickerFile(f);
+                e.currentTarget.value = '';
+              }}
+            />
+          </label>
+          <button className="btn sm" onClick={() => setShowLibrary(true)}>
+            + Add from saved drawings
+          </button>
+        </div>
+
+        {report.drawings.length === 0 ? (
+          <p className="hint">
+            No drawings yet. Add pages from a PDF (select one or several) or pick from
+            your saved drawings. Each page can be marked up and is included in the
+            exported PDF.
+          </p>
+        ) : (
+          <>
+            {/* page switcher */}
+            <div className="drawing-strip">
+              {report.drawings.map((d, i) => (
+                <div
+                  key={d.id}
+                  className={`strip-thumb${i === activeIdx ? ' active' : ''}`}
+                  onClick={() => setActiveIdx(i)}
+                  title={d.name || `Drawing ${i + 1}`}
+                >
+                  <img src={d.backgroundDataUrl} alt={d.name || `Drawing ${i + 1}`} />
+                  <span className="strip-num">{i + 1}</span>
+                  <button
+                    className="thumb-del"
+                    title="Remove page"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (window.confirm('Remove this drawing page from the report?'))
+                        removeDrawing(i);
+                    }}
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {report.drawings[activeIdx] && (
+              <DrawingCanvas
+                key={report.drawings[activeIdx].id}
+                value={report.drawings[activeIdx]}
+                onChange={updateActiveDrawing}
+              />
+            )}
+          </>
+        )}
       </div>
+
+      {pdfPickerFile && (
+        <PdfPagePicker
+          file={pdfPickerFile}
+          onCancel={() => setPdfPickerFile(null)}
+          onConfirm={(pages) => {
+            const base = pdfPickerFile.name.replace(/\.pdf$/i, '');
+            setPdfPickerFile(null);
+            void addPages(pages, base);
+          }}
+        />
+      )}
+
+      {showLibrary && (
+        <SavedDrawingsPicker
+          onCancel={() => setShowLibrary(false)}
+          onPick={(saved) => {
+            setShowLibrary(false);
+            addSavedDrawings(saved);
+          }}
+        />
+      )}
 
       {exportState && (
         <ExportDialog

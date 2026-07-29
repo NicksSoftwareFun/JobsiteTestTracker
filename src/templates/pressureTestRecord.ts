@@ -43,7 +43,7 @@ export const pressureTestRecord: Template = {
     {
       id: 'description',
       title: 'Brief Description of Test',
-      fieldKeys: ['description'],
+      fieldKeys: ['description', 'photos'],
     },
     {
       id: 'signoff',
@@ -79,6 +79,7 @@ export const pressureTestRecord: Template = {
 
     // --- Description ---
     { key: 'description', label: 'Brief Description of Test', type: 'multiline', autofill: 'perTest' },
+    { key: 'photos', label: 'Attach Photos', type: 'photos', autofill: 'perTest' },
 
     // --- Sign-off ---
     { key: 'witnessSignature', label: 'Witnessed by WMG CQC', type: 'signature', autofill: 'perTest' },

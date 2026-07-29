@@ -1,5 +1,6 @@
 import type { CheckboxPairValue, FieldDef, FieldValue, Template } from '../types';
 import SignaturePad from './SignaturePad';
+import PhotoField from './PhotoField';
 
 // Generic, schema-driven form. Renders any Template's sections and fields, so
 // built-in and user-defined custom templates use the exact same UI.
@@ -112,6 +113,13 @@ function FieldControl({
             onChange={(dataUrl) => onChange(dataUrl)}
           />
         </div>
+      );
+    case 'photos':
+      return (
+        <PhotoField
+          value={value as string[] | undefined}
+          onChange={(photos) => onChange(photos)}
+        />
       );
     default:
       return (

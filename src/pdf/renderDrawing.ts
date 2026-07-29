@@ -53,6 +53,33 @@ export async function renderDrawingFile(file: File): Promise<RenderedDrawing> {
   return renderImage(file);
 }
 
+/** Render EVERY page of a PDF to images (for the page picker). */
+export async function renderAllPdfPages(
+  file: File,
+  targetLongEdge = 1600,
+  onProgress?: (done: number, total: number) => void,
+): Promise<RenderedDrawing[]> {
+  const data = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data }).promise;
+  const out: RenderedDrawing[] = [];
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const base = page.getViewport({ scale: 1 });
+    const scale = targetLongEdge / Math.max(base.width, base.height);
+    const viewport = page.getViewport({ scale });
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(viewport.width);
+    canvas.height = Math.round(viewport.height);
+    const ctx = canvas.getContext('2d')!;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    await page.render({ canvasContext: ctx, viewport }).promise;
+    out.push({ dataUrl: canvas.toDataURL('image/png'), width: canvas.width, height: canvas.height });
+    onProgress?.(i, pdf.numPages);
+  }
+  return out;
+}
+
 /** Load a bundled asset URL (the sample drawing) as a RenderedDrawing. */
 export async function renderDrawingUrl(url: string): Promise<RenderedDrawing> {
   const res = await fetch(url);

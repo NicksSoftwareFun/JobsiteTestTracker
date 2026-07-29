@@ -50,15 +50,17 @@ export default function App() {
       else if (f.default === 'now') values[f.key] = nowTime();
     }
     // Bundle the sample drawing so the app is testable immediately.
-    let drawing: Report['drawing'] = null;
+    const drawings: Report['drawings'] = [];
     try {
       const rendered = await renderDrawingUrl(sampleDrawingUrl);
-      drawing = {
+      drawings.push({
+        id: uid('dr_'),
+        name: 'Sample drawing',
         backgroundDataUrl: rendered.dataUrl,
         bgWidth: rendered.width,
         bgHeight: rendered.height,
         fabricJson: null,
-      };
+      });
     } catch {
       /* sample optional */
     }
@@ -69,7 +71,7 @@ export default function App() {
       projectId: null,
       title: template.name,
       values,
-      drawing,
+      drawings,
       createdAt: Date.now(),
       updatedAt: Date.now(),
       status: 'draft',

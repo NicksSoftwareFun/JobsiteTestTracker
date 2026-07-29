@@ -59,6 +59,7 @@ export default function DrawingCanvas({ value, onChange }: Props) {
   const fabricRef = useRef<Canvas | null>(null);
   const bgSizeRef = useRef<{ w: number; h: number }>({ w: 1000, h: 750 });
   const bgDataUrlRef = useRef<string>(value?.backgroundDataUrl ?? '');
+  const idRef = useRef<string>(value?.id ?? '');
   const restoringRef = useRef(false);
   const historyRef = useRef<string[]>([]);
   const fitZoomRef = useRef(1);
@@ -76,6 +77,7 @@ export default function DrawingCanvas({ value, onChange }: Props) {
     const canvas = fabricRef.current;
     if (!canvas) return;
     onChange({
+      id: idRef.current,
       backgroundDataUrl: bgDataUrlRef.current,
       bgWidth: bgSizeRef.current.w,
       bgHeight: bgSizeRef.current.h,

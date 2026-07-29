@@ -22,6 +22,7 @@ const TYPE_LABELS: Record<FieldType, string> = {
   time: 'Time',
   checkboxPair: 'Two checkboxes',
   signature: 'Signature',
+  photos: 'Photos',
 };
 
 function newField(): DraftField {

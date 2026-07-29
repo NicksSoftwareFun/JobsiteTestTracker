@@ -11,7 +11,8 @@ export type FieldType =
   | 'date'
   | 'time'
   | 'checkboxPair'
-  | 'signature';
+  | 'signature'
+  | 'photos';
 
 /** Which block a field belongs to for autofill purposes. */
 export type AutofillGroup = 'project' | 'perTest';
@@ -45,17 +46,31 @@ export interface Template {
   createdAt: number;
 }
 
-/** value shapes per field type */
+/** value shapes per field type. 'photos' fields hold an array of image data URLs. */
 export type CheckboxPairValue = { left: boolean; right: boolean };
-export type FieldValue = string | CheckboxPairValue | undefined;
+export type FieldValue = string | CheckboxPairValue | string[] | undefined;
 
 export interface DrawingState {
+  /** stable id (used for React keys and per-page markup) */
+  id: string;
+  /** optional human label, e.g. the source PDF page */
+  name?: string;
   /** rendered drawing image (data URL) used as the canvas background */
   backgroundDataUrl: string;
   bgWidth: number;
   bgHeight: number;
   /** fabric.js serialized markup (highlights, text boxes, arrows) */
   fabricJson: unknown | null;
+}
+
+/** A reusable drawing page saved to the on-device library (like a template). */
+export interface SavedDrawing {
+  id: string;
+  name: string;
+  backgroundDataUrl: string;
+  bgWidth: number;
+  bgHeight: number;
+  createdAt: number;
 }
 
 export interface Report {
@@ -65,7 +80,10 @@ export interface Report {
   projectId: string | null;
   title: string;
   values: Record<string, FieldValue>;
-  drawing: DrawingState | null;
+  /** one or more markup-able drawing pages */
+  drawings: DrawingState[];
+  /** legacy single-drawing field (migrated into `drawings` on load) */
+  drawing?: DrawingState | null;
   createdAt: number;
   updatedAt: number;
   status: 'draft' | 'completed';
