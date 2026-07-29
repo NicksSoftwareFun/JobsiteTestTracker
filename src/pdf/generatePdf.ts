@@ -235,6 +235,29 @@ export async function generateReportPdf({
     y -= 6;
   }
 
+  // Gather attached photos up front so we can both note and render them.
+  const photos: string[] = [];
+  for (const f of template.fields) {
+    if (f.type === 'photos') {
+      const v = report.values[f.key];
+      if (Array.isArray(v)) photos.push(...(v as string[]));
+    }
+  }
+
+  // Blank drawing/photo pages are simply not added. When either is absent, note
+  // it at the bottom of the first page so the omission is explicit.
+  const notes: string[] = [];
+  if (drawingImages.length === 0) notes.push('No Drawings Included');
+  if (photos.length === 0) notes.push('No Photos Included');
+  if (notes.length) {
+    const first = doc.getPage(0);
+    let ny = MARGIN;
+    for (const n of [...notes].reverse()) {
+      first.drawText(n, { x: MARGIN, y: ny, size: 10, font: bold, color: rgb(0.45, 0.45, 0.45) });
+      ny += 15;
+    }
+  }
+
   // One page per marked-up drawing.
   for (let i = 0; i < drawingImages.length; i++) {
     const label =
@@ -244,14 +267,7 @@ export async function generateReportPdf({
     await addDrawingPage(doc, bold, drawingImages[i], label);
   }
 
-  // Attached photos (from any 'photos' field) on their own page(s).
-  const photos: string[] = [];
-  for (const f of template.fields) {
-    if (f.type === 'photos') {
-      const v = report.values[f.key];
-      if (Array.isArray(v)) photos.push(...(v as string[]));
-    }
-  }
+  // Attached photos on their own page(s).
   if (photos.length) await addPhotoPages(doc, bold, photos);
 
   return doc.save();
