@@ -270,6 +270,22 @@ export async function generateReportPdf({
   // Attached photos on their own page(s).
   if (photos.length) await addPhotoPages(doc, bold, photos);
 
+  // Footer page numbers ("1 of 3") on every page, bottom-right.
+  const allPages = doc.getPages();
+  const total = allPages.length;
+  allPages.forEach((p, i) => {
+    const label = `${i + 1} of ${total}`;
+    const size = 9;
+    const w = font.widthOfTextAtSize(label, size);
+    p.drawText(label, {
+      x: p.getWidth() - MARGIN - w,
+      y: 20,
+      size,
+      font,
+      color: rgb(0.45, 0.45, 0.45),
+    });
+  });
+
   return doc.save();
 }
 
