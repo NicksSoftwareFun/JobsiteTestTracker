@@ -4,6 +4,12 @@ import { appendReportToLog } from '../pdf/appendToLog';
 // User story 3: after generating the combined report PDF, choose a destination —
 // upload/share to OneDrive (iOS share sheet), append onto an existing PDF test
 // log, or just save to Files.
+//
+// NOTE: navigator.share() must be invoked from a live user gesture. Any async
+// work (reading/merging a PDF) before the call consumes that gesture and iOS
+// throws "Must be handling a user gesture". So the append flow is two steps:
+// pick+merge (async) first, then the user taps a Share/Save button (fresh
+// gesture) to send the result.
 
 interface Props {
   pdfBytes: Uint8Array;
@@ -28,83 +34,73 @@ function downloadBlob(blob: Blob, name: string) {
   setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 
-async function shareBlob(blob: Blob, name: string): Promise<boolean> {
-  const file = new File([blob], name, { type: 'application/pdf' });
+function canShareFiles(file: File): boolean {
   const nav = navigator as Navigator & {
     canShare?: (data: { files: File[] }) => boolean;
   };
-  if (nav.share && nav.canShare && nav.canShare({ files: [file] })) {
-    await nav.share({
-      files: [file],
-      title: name,
-      text: 'Test report',
-    });
-    return true;
-  }
-  return false;
+  if (typeof nav.share !== 'function' || typeof nav.canShare !== 'function') return false;
+  return nav.canShare({ files: [file] });
 }
 
 export default function ExportDialog({ pdfBytes, fileName, onClose }: Props) {
   const [status, setStatus] = useState<string>('');
   const [busy, setBusy] = useState(false);
+  // Result of merging this report into a chosen log, awaiting a Share/Save tap.
+  const [mergedLog, setMergedLog] = useState<{ bytes: Uint8Array; name: string } | null>(null);
 
-  const shareToOneDrive = async () => {
-    setBusy(true);
-    setStatus('');
+  // Called directly from a button tap so the Web Share user-gesture rule holds.
+  const shareOrDownload = async (bytes: Uint8Array, name: string, successMsg: string) => {
+    const blob = bytesToBlob(bytes);
+    const file = new File([blob], name, { type: 'application/pdf' });
+    if (!canShareFiles(file)) {
+      downloadBlob(blob, name);
+      setStatus('Sharing isn\'t available here — the PDF was downloaded. Open it and use "Save to Files → OneDrive".');
+      return;
+    }
     try {
-      const blob = bytesToBlob(pdfBytes);
-      const shared = await shareBlob(blob, fileName);
-      if (!shared) {
-        downloadBlob(blob, fileName);
-        setStatus(
-          'Your device does not support direct sharing here — the PDF was downloaded. Open it and use "Save to Files → OneDrive".',
-        );
-      } else {
-        setStatus('Shared. Choose OneDrive (or Files → OneDrive) in the share sheet.');
+      await (navigator as Navigator).share({ files: [file], title: name });
+      setStatus(successMsg);
+    } catch (e) {
+      if (e instanceof Error && e.name === 'AbortError') {
+        setStatus('Share cancelled — nothing sent.');
+        return;
       }
-    } catch {
-      setStatus('Sharing was cancelled.');
-    } finally {
-      setBusy(false);
+      // e.g. gesture expired or share unavailable → fall back to a download.
+      downloadBlob(blob, name);
+      setStatus('Couldn\'t open the share sheet, so the PDF was downloaded — open it and use "Save to Files → OneDrive".');
     }
   };
+
+  const shareReport = () =>
+    shareOrDownload(pdfBytes, fileName, 'Shared. Choose OneDrive (or Files → OneDrive) in the share sheet.');
 
   const saveToFiles = () => {
     downloadBlob(bytesToBlob(pdfBytes), fileName);
     setStatus('Saved. In the download/Files prompt, pick your OneDrive folder.');
   };
 
-  const appendToExisting = async (file: File) => {
+  // Step 1 of append: read + merge (async). Does NOT share (gesture would be gone).
+  const mergeWithLog = async (file: File) => {
     setBusy(true);
     setStatus('');
+    setMergedLog(null);
     try {
       const existing = await file.arrayBuffer();
-
-      // Empty file → almost always an iCloud/OneDrive placeholder that hasn't
-      // been downloaded to the device yet.
       if (!existing || existing.byteLength === 0) {
         setStatus(
           `"${file.name}" came through empty. If it lives in OneDrive/iCloud, open it once in the Files app so it downloads, then try again.`,
         );
         return;
       }
-      // Sanity check the PDF header before handing it to pdf-lib.
       const header = new TextDecoder().decode(new Uint8Array(existing.slice(0, 5)));
       if (!header.startsWith('%PDF')) {
-        setStatus(
-          `"${file.name}" doesn't look like a PDF. Please pick a PDF test log.`,
-        );
+        setStatus(`"${file.name}" doesn't look like a PDF. Please pick a PDF test log.`);
         return;
       }
-
       const merged = await appendReportToLog(existing, pdfBytes);
       const outName = file.name.replace(/\.pdf$/i, '') + ' (updated).pdf';
-      const blob = bytesToBlob(merged);
-      const shared = await shareBlob(blob, outName);
-      if (!shared) downloadBlob(blob, outName);
-      setStatus(
-        `Appended this report to "${file.name}". Save the updated log back to the same OneDrive location.`,
-      );
+      setMergedLog({ bytes: merged, name: outName });
+      setStatus(`Added this report to "${file.name}". Now tap Share or Save below to store the updated log.`);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       const passwordProtected = /password|encrypt/i.test(msg);
@@ -132,7 +128,7 @@ export default function ExportDialog({ pdfBytes, fileName, onClose }: Props) {
             Opens the share sheet — choose the OneDrive app (or Files → OneDrive) to
             store this report in your job folder.
           </p>
-          <button className="btn primary" onClick={shareToOneDrive} disabled={busy}>
+          <button className="btn primary" onClick={shareReport} disabled={busy}>
             Share to OneDrive
           </button>
         </div>
@@ -144,7 +140,7 @@ export default function ExportDialog({ pdfBytes, fileName, onClose }: Props) {
             are added to the end, producing an updated single-source-of-truth log.
           </p>
           <label className="btn navy">
-            Choose test log PDF…
+            {mergedLog ? 'Choose a different test log…' : 'Choose test log PDF…'}
             <input
               type="file"
               accept="application/pdf"
@@ -152,11 +148,39 @@ export default function ExportDialog({ pdfBytes, fileName, onClose }: Props) {
               disabled={busy}
               onChange={(e) => {
                 const f = e.target.files?.[0];
-                if (f) void appendToExisting(f);
+                if (f) void mergeWithLog(f);
                 e.currentTarget.value = '';
               }}
             />
           </label>
+
+          {mergedLog && (
+            <div className="row" style={{ marginTop: 10 }}>
+              <button
+                className="btn primary"
+                disabled={busy}
+                onClick={() =>
+                  shareOrDownload(
+                    mergedLog.bytes,
+                    mergedLog.name,
+                    `Shared "${mergedLog.name}". Save it back to the same OneDrive location.`,
+                  )
+                }
+              >
+                Share updated log
+              </button>
+              <button
+                className="btn"
+                disabled={busy}
+                onClick={() => {
+                  downloadBlob(bytesToBlob(mergedLog.bytes), mergedLog.name);
+                  setStatus(`Saved "${mergedLog.name}". Put it back in the same OneDrive location.`);
+                }}
+              >
+                Save updated log
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="card">

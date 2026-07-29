@@ -11,10 +11,12 @@ export async function appendReportToLog(
   existingLogPdf: ArrayBuffer,
   newReportPdf: Uint8Array,
 ): Promise<Uint8Array> {
-  // ignoreEncryption lets us open "secured" PDFs (e.g. from Bluebeam/Adobe)
-  // that carry permission flags but no open password.
-  const log = await PDFDocument.load(existingLogPdf, { ignoreEncryption: true });
-  const report = await PDFDocument.load(newReportPdf, { ignoreEncryption: true });
+  // Load normally (no ignoreEncryption): pdf-lib can OPEN an encrypted PDF but
+  // cannot DECRYPT its content streams, so ignoring encryption would silently
+  // produce a corrupt merged log. Letting an encrypted input throw here lets the
+  // caller show an honest "remove the protection" message instead.
+  const log = await PDFDocument.load(existingLogPdf);
+  const report = await PDFDocument.load(newReportPdf);
   const pages = await log.copyPages(report, report.getPageIndices());
   pages.forEach((p) => log.addPage(p));
   return log.save();
