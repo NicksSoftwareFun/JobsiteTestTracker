@@ -342,6 +342,9 @@ select.text-input {
 .modal h2 {
   margin-top: 0;
 }
+.modal.modal-sm {
+  max-width: 420px;
+}
 
 /* Export dialog: equal split-button rows */
 .btn-split {
