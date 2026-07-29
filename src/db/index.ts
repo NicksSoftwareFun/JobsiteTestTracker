@@ -93,3 +93,52 @@ export async function getSetting<T>(key: string): Promise<T | undefined> {
 export async function setSetting(key: string, value: unknown) {
   await (await getDB()).put('settings', value, key);
 }
+
+// --- Backup / Restore (all data in one file) ---
+export interface BackupData {
+  app: 'warwick-qc';
+  version: number;
+  exportedAt: number;
+  projects: Project[];
+  reports: Report[];
+  templates: Template[];
+  drawings: SavedDrawing[];
+  settings: { key: string; value: unknown }[];
+}
+
+export async function exportAllData(): Promise<BackupData> {
+  const db = await getDB();
+  const [projects, reports, templates, drawings] = await Promise.all([
+    db.getAll('projects'),
+    db.getAll('reports'),
+    db.getAll('templates'),
+    db.getAll('drawings'),
+  ]);
+  const settingKeys = await db.getAllKeys('settings');
+  const settings = await Promise.all(
+    settingKeys.map(async (k) => ({ key: String(k), value: await db.get('settings', k) })),
+  );
+  return { app: 'warwick-qc', version: 1, exportedAt: Date.now(), projects, reports, templates, drawings, settings };
+}
+
+export async function importAllData(data: BackupData, mode: 'merge' | 'replace') {
+  const db = await getDB();
+  const tx = db.transaction(['projects', 'reports', 'templates', 'drawings', 'settings'], 'readwrite');
+  if (mode === 'replace') {
+    await Promise.all([
+      tx.objectStore('projects').clear(),
+      tx.objectStore('reports').clear(),
+      tx.objectStore('templates').clear(),
+      tx.objectStore('drawings').clear(),
+      tx.objectStore('settings').clear(),
+    ]);
+  }
+  for (const p of data.projects ?? []) await tx.objectStore('projects').put(p);
+  for (const r of data.reports ?? []) await tx.objectStore('reports').put(r);
+  for (const t of data.templates ?? []) {
+    if (!t.builtIn) await tx.objectStore('templates').put(t); // built-ins live in code
+  }
+  for (const d of data.drawings ?? []) await tx.objectStore('drawings').put(d);
+  for (const s of data.settings ?? []) await tx.objectStore('settings').put(s.value, s.key);
+  await tx.done;
+}

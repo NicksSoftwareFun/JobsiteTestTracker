@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { Report, SavedDrawing, Template } from './types';
+import type { Project, Report, SavedDrawing, Template } from './types';
 import {
   deleteReport as dbDeleteReport,
   deleteTemplate as dbDeleteTemplate,
+  getProjects,
   getReports,
   getSavedDrawings,
   saveReport,
@@ -25,6 +26,7 @@ export default function App() {
   const [reports, setReports] = useState<Report[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [savedDrawings, setSavedDrawings] = useState<SavedDrawing[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [theme, setTheme] = useState<Theme>(
     () => (localStorage.getItem('qc-theme') as Theme) || 'light',
   );
@@ -38,6 +40,7 @@ export default function App() {
     setReports(await getReports());
     setTemplates(await getAllTemplates());
     setSavedDrawings(await getSavedDrawings());
+    setProjects(await getProjects());
   }, []);
 
   useEffect(() => {
@@ -129,6 +132,7 @@ export default function App() {
           reports={reports}
           templates={templates}
           savedDrawings={savedDrawings}
+          projects={projects}
           onOpen={(id) => setView({ name: 'editor', reportId: id })}
           onNewReport={newReport}
           onNewTemplate={() => setView({ name: 'builder' })}

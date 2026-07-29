@@ -1,7 +1,13 @@
-import { useState } from 'react';
-import type { Report, SavedDrawing, Template } from '../types';
-import { displayDate, uid } from '../utils';
-import { deleteSavedDrawing, saveDrawing } from '../db';
+import { useEffect, useMemo, useState } from 'react';
+import type { Project, Report, SavedDrawing, Template } from '../types';
+import { displayDate, downloadBlob, uid } from '../utils';
+import {
+  deleteSavedDrawing,
+  exportAllData,
+  importAllData,
+  saveDrawing,
+  type BackupData,
+} from '../db';
 import { renderDrawingFile } from '../pdf/renderDrawing';
 import PdfPagePicker from './PdfPagePicker';
 import logoUrl from '../assets/warwick-logo.png';
@@ -10,6 +16,7 @@ interface Props {
   reports: Report[];
   templates: Template[];
   savedDrawings: SavedDrawing[];
+  projects: Project[];
   onOpen: (id: string) => void;
   onNewReport: (templateId: string) => void;
   onNewTemplate: () => void;
@@ -18,10 +25,13 @@ interface Props {
   onSavedDrawingsChanged: () => void;
 }
 
+type StatusFilter = 'all' | 'draft' | 'completed';
+
 export default function Home({
   reports,
   templates,
   savedDrawings,
+  projects,
   onOpen,
   onNewReport,
   onNewTemplate,
@@ -33,14 +43,31 @@ export default function Home({
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
 
+  // find & organize
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [groupByProject, setGroupByProject] = useState(false);
+
+  // data safety
+  const [storageMB, setStorageMB] = useState<number | null>(null);
+  const [pendingRestore, setPendingRestore] = useState<BackupData | null>(null);
+  const [dataNote, setDataNote] = useState('');
+
+  useEffect(() => {
+    navigator.storage?.estimate?.().then((e) => {
+      if (e && typeof e.usage === 'number') setStorageMB(e.usage / (1024 * 1024));
+    });
+  }, [reports, savedDrawings, templates]);
+
+  const projectName = (id: string | null) =>
+    (id && projects.find((p) => p.id === id)?.name) || 'Unassigned';
+
   const onUploadFile = async (file: File) => {
-    const isPdf =
-      file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
     if (isPdf) {
-      setPdfFile(file); // open the page picker
+      setPdfFile(file);
       return;
     }
-    // image → save directly as one drawing
     setBusy(true);
     try {
       const r = await renderDrawingFile(file);
@@ -57,6 +84,98 @@ export default function Home({
       setBusy(false);
     }
   };
+
+  const backupNow = async () => {
+    setDataNote('');
+    const data = await exportAllData();
+    const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+    const day = new Date().toISOString().slice(0, 10);
+    downloadBlob(blob, `warwick-qc-backup-${day}.json`);
+    setDataNote('Backup created. Save the downloaded file to OneDrive to keep it safe.');
+  };
+
+  const onRestoreFile = async (file: File) => {
+    setDataNote('');
+    try {
+      const data = JSON.parse(await file.text()) as BackupData;
+      if (data?.app !== 'warwick-qc' || !Array.isArray(data.reports)) {
+        setDataNote('That file is not a valid Warwick QC backup.');
+        return;
+      }
+      setPendingRestore(data);
+    } catch {
+      setDataNote('Could not read that backup file.');
+    }
+  };
+
+  const doRestore = async (mode: 'merge' | 'replace') => {
+    if (!pendingRestore) return;
+    await importAllData(pendingRestore, mode);
+    const counts = `${pendingRestore.reports?.length ?? 0} reports, ${pendingRestore.drawings?.length ?? 0} drawings`;
+    setPendingRestore(null);
+    onSavedDrawingsChanged();
+    setDataNote(`Restore complete (${mode}). Loaded ${counts}.`);
+  };
+
+  const filteredReports = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return reports.filter((r) => {
+      if (statusFilter !== 'all' && r.status !== statusFilter) return false;
+      if (!q) return true;
+      const hay = [
+        r.templateName,
+        String(r.values['jobNumber'] ?? ''),
+        String(r.values['location'] ?? ''),
+        displayDate(String(r.values['date'] ?? '')),
+        projectName(r.projectId),
+        r.status,
+      ]
+        .join(' ')
+        .toLowerCase();
+      return hay.includes(q);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reports, search, statusFilter, projects]);
+
+  const groups = useMemo(() => {
+    if (!groupByProject) return null;
+    const map = new Map<string, Report[]>();
+    for (const r of filteredReports) {
+      const key = projectName(r.projectId);
+      const arr = map.get(key);
+      if (arr) arr.push(r);
+      else map.set(key, [r]);
+    }
+    return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filteredReports, groupByProject, projects]);
+
+  const reportRow = (r: Report) => (
+    <div className="list-item" key={r.id}>
+      <div className="meta" onClick={() => onOpen(r.id)} style={{ cursor: 'pointer' }}>
+        <div className="name">
+          {r.templateName}
+          {r.values['jobNumber'] ? ` — Job ${String(r.values['jobNumber'])}` : ''}
+        </div>
+        <div className="sub">
+          {displayDate(String(r.values['date'] ?? '')) || new Date(r.updatedAt).toLocaleDateString()}
+          {r.projectId ? ` · ${projectName(r.projectId)}` : ''}
+        </div>
+      </div>
+      <span className={`badge ${r.status}`}>{r.status}</span>
+      <button className="btn sm" onClick={() => onOpen(r.id)}>
+        Open
+      </button>
+      <button
+        className="btn sm danger"
+        onClick={() => {
+          if (confirm('Delete this report?')) onDeleteReport(r.id);
+        }}
+      >
+        ✕
+      </button>
+    </div>
+  );
 
   return (
     <div className="content">
@@ -79,32 +198,53 @@ export default function Home({
 
       <div className="card">
         <h3>Reports</h3>
-        {reports.length === 0 && <p className="hint">No reports yet. Tap “New Report” to start.</p>}
-        {reports.map((r) => (
-          <div className="list-item" key={r.id}>
-            <div className="meta" onClick={() => onOpen(r.id)} style={{ cursor: 'pointer' }}>
-              <div className="name">
-                {r.templateName}
-                {r.values['jobNumber'] ? ` — Job ${String(r.values['jobNumber'])}` : ''}
-              </div>
-              <div className="sub">
-                {displayDate(String(r.values['date'] ?? '')) || new Date(r.updatedAt).toLocaleDateString()}
-              </div>
-            </div>
-            <span className={`badge ${r.status}`}>{r.status}</span>
-            <button className="btn sm" onClick={() => onOpen(r.id)}>
-              Open
-            </button>
-            <button
-              className="btn sm danger"
-              onClick={() => {
-                if (confirm('Delete this report?')) onDeleteReport(r.id);
-              }}
+
+        {reports.length > 0 && (
+          <div className="row" style={{ marginBottom: 12 }}>
+            <input
+              type="text"
+              className="text-input"
+              style={{ flex: 1, minWidth: 160 }}
+              placeholder="Search job #, location, project…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+            <select
+              className="text-input"
+              style={{ maxWidth: 150 }}
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
             >
-              ✕
-            </button>
+              <option value="all">All statuses</option>
+              <option value="draft">Drafts</option>
+              <option value="completed">Completed</option>
+            </select>
+            <label className="hint" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <input
+                type="checkbox"
+                checked={groupByProject}
+                onChange={(e) => setGroupByProject(e.target.checked)}
+              />
+              Group by project
+            </label>
           </div>
-        ))}
+        )}
+
+        {reports.length === 0 && <p className="hint">No reports yet. Tap “New Report” to start.</p>}
+        {reports.length > 0 && filteredReports.length === 0 && (
+          <p className="hint">No reports match your search.</p>
+        )}
+
+        {groups
+          ? groups.map(([name, rows]) => (
+              <div key={name} style={{ marginBottom: 8 }}>
+                <div className="section-title" style={{ marginTop: 6 }}>
+                  {name} ({rows.length})
+                </div>
+                {rows.map(reportRow)}
+              </div>
+            ))
+          : filteredReports.map(reportRow)}
       </div>
 
       <div className="card">
@@ -182,6 +322,40 @@ export default function Home({
         )}
       </div>
 
+      {/* Data safety */}
+      <div className="card">
+        <h3>Data &amp; Backup</h3>
+        <p className="hint">
+          Reports are stored on this device. Back up regularly and keep the file in
+          OneDrive — then you can restore it here or move everything to another iPad.
+        </p>
+        <div className="row">
+          <button className="btn primary" onClick={backupNow}>
+            ⬇ Back Up All Data
+          </button>
+          <label className="btn navy">
+            ⬆ Restore from Backup
+            <input
+              type="file"
+              accept="application/json,.json"
+              style={{ display: 'none' }}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void onRestoreFile(f);
+                e.currentTarget.value = '';
+              }}
+            />
+          </label>
+        </div>
+        {storageMB != null && (
+          <p className="hint" style={{ marginTop: 10 }}>
+            Using about <strong>{storageMB.toFixed(1)} MB</strong> of on-device storage.
+            {storageMB > 400 && ' Consider backing up and clearing old reports.'}
+          </p>
+        )}
+        {dataNote && <p className="status-note">{dataNote}</p>}
+      </div>
+
       {pdfFile && (
         <PdfPagePicker
           file={pdfFile}
@@ -202,6 +376,32 @@ export default function Home({
             onSavedDrawingsChanged();
           }}
         />
+      )}
+
+      {pendingRestore && (
+        <div className="modal-backdrop" onClick={() => setPendingRestore(null)}>
+          <div className="modal modal-sm" onClick={(e) => e.stopPropagation()}>
+            <h2>Restore backup</h2>
+            <p className="hint">
+              This backup has <strong>{pendingRestore.reports?.length ?? 0}</strong> reports and{' '}
+              <strong>{pendingRestore.drawings?.length ?? 0}</strong> saved drawings.
+              How should it be applied?
+            </p>
+            <div className="btn-split">
+              <button className="btn primary block" onClick={() => doRestore('merge')}>
+                Merge (add to current)
+              </button>
+              <button className="btn navy block" onClick={() => doRestore('replace')}>
+                Replace everything
+              </button>
+            </div>
+            <div className="row" style={{ justifyContent: 'flex-end', marginTop: 14 }}>
+              <button className="btn danger sm" onClick={() => setPendingRestore(null)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {picking && (
