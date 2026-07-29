@@ -13,6 +13,7 @@ interface DraftField {
   optA: string;
   optB: string;
   default: '' | 'today' | 'now';
+  required: boolean;
 }
 
 const TYPE_LABELS: Record<FieldType, string> = {
@@ -34,20 +35,43 @@ function newField(): DraftField {
     optA: 'YES',
     optB: 'NO',
     default: '',
+    required: false,
   };
 }
 
+function draftFromTemplate(t: Template): DraftField[] {
+  return t.fields.map((f) => ({
+    id: uid('f_'),
+    label: f.label,
+    type: f.type,
+    autofill: f.autofill,
+    optA: f.options?.[0] ?? 'YES',
+    optB: f.options?.[1] ?? 'NO',
+    default: f.default === 'today' || f.default === 'now' ? f.default : '',
+    required: !!f.required,
+  }));
+}
+
 interface Props {
+  initial?: Template;
+  keepId?: boolean;
   onSave: (t: Template) => void;
   onCancel: () => void;
 }
 
-export default function TemplateBuilder({ onSave, onCancel }: Props) {
-  const [name, setName] = useState('');
-  const [fields, setFields] = useState<DraftField[]>([
-    { ...newField(), label: 'Job Number', autofill: 'project' },
-    { ...newField(), label: 'Date', type: 'date', default: 'today' },
-  ]);
+export default function TemplateBuilder({ initial, keepId, onSave, onCancel }: Props) {
+  const editing = !!initial && !!keepId;
+  const [name, setName] = useState(
+    initial ? (keepId ? initial.name : `${initial.name} (copy)`) : '',
+  );
+  const [fields, setFields] = useState<DraftField[]>(
+    initial
+      ? draftFromTemplate(initial)
+      : [
+          { ...newField(), label: 'Job Number', autofill: 'project' },
+          { ...newField(), label: 'Date', type: 'date', default: 'today' },
+        ],
+  );
 
   const update = (id: string, patch: Partial<DraftField>) =>
     setFields((fs) => fs.map((f) => (f.id === id ? { ...f, ...patch } : f)));
@@ -79,6 +103,7 @@ export default function TemplateBuilder({ onSave, onCancel }: Props) {
       };
       if (f.type === 'checkboxPair') def.options = [f.optA || 'A', f.optB || 'B'];
       if (f.default) def.default = f.default;
+      if (f.required) def.required = true;
       return def;
     });
 
@@ -90,10 +115,10 @@ export default function TemplateBuilder({ onSave, onCancel }: Props) {
     if (restKeys.length) sections.push({ id: 'details', title: 'Details', fieldKeys: restKeys });
 
     const template: Template = {
-      id: uid('tpl.'),
+      id: editing && initial ? initial.id : uid('tpl.'),
       name: name.trim(),
       builtIn: false,
-      createdAt: Date.now(),
+      createdAt: editing && initial ? initial.createdAt : Date.now(),
       sections,
       fields: built,
     };
@@ -103,7 +128,7 @@ export default function TemplateBuilder({ onSave, onCancel }: Props) {
   return (
     <div className="content">
       <div className="card">
-        <h2>New form template</h2>
+        <h2>{editing ? 'Edit template' : 'New form template'}</h2>
         <div className="field">
           <label>Template name</label>
           <input
@@ -196,6 +221,14 @@ export default function TemplateBuilder({ onSave, onCancel }: Props) {
                 Auto-fill {f.type === 'date' ? "today's date" : 'current time'}
               </label>
             )}
+            <label className="hint" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input
+                type="checkbox"
+                checked={f.required}
+                onChange={(e) => update(f.id, { required: e.target.checked })}
+              />
+              Required to complete report
+            </label>
           </div>
         ))}
         <button className="btn sm" onClick={() => setFields((fs) => [...fs, newField()])}>

@@ -58,14 +58,14 @@ export const pressureTestRecord: Template = {
   ],
   fields: [
     // --- Administrative block (saved per project, autofilled) ---
-    { key: 'jobNumber', label: 'Job Number', type: 'text', autofill: 'project' },
+    { key: 'jobNumber', label: 'Job Number', type: 'text', autofill: 'project', required: true },
     { key: 'projectManager', label: 'Project Manager', type: 'text', autofill: 'project' },
     { key: 'generalContractor', label: 'General Contractor', type: 'text', autofill: 'project' },
     { key: 'contractorPresent', label: 'Contractor or Vendor Present', type: 'text', autofill: 'project' },
     { key: 'contractDrawing', label: 'Contract Drawing #', type: 'text', autofill: 'project' },
 
     // --- Test details (per test) ---
-    { key: 'date', label: 'Date', type: 'date', autofill: 'perTest', default: 'today' },
+    { key: 'date', label: 'Date', type: 'date', autofill: 'perTest', default: 'today', required: true },
     { key: 'startTime', label: 'Start Time', type: 'time', autofill: 'perTest', default: 'now' },
     { key: 'endTime', label: 'End Time', type: 'time', autofill: 'perTest' },
     { key: 'location', label: 'Location', type: 'text', autofill: 'perTest' },
@@ -82,7 +82,7 @@ export const pressureTestRecord: Template = {
     { key: 'photos', label: 'Attach Photos', type: 'photos', autofill: 'perTest' },
 
     // --- Sign-off ---
-    { key: 'witnessSignature', label: 'Witnessed by WMG CQC', type: 'signature', autofill: 'perTest' },
+    { key: 'witnessSignature', label: 'Witnessed by WMG CQC', type: 'signature', autofill: 'perTest', required: true },
     { key: 'secondSignature', label: 'Additional Signature', type: 'signature', autofill: 'perTest' },
     { key: 'fabShopManager', label: 'WMG Fab Shop Manager', type: 'text', autofill: 'perTest' },
     { key: 'phone', label: 'Phone #', type: 'text', autofill: 'perTest' },

@@ -10,6 +10,7 @@ import {
   saveTemplate,
 } from './db';
 import { getAllTemplates, getTemplateById } from './templates';
+import { getReport } from './db';
 import { todayISO, nowTime, uid } from './utils';
 import { renderDrawingUrl } from './pdf/renderDrawing';
 import Home from './components/Home';
@@ -17,7 +18,10 @@ import ReportEditor from './components/ReportEditor';
 import TemplateBuilder from './components/TemplateBuilder';
 import sampleDrawingUrl from './data/sample-drawing.png';
 
-type View = { name: 'home' } | { name: 'editor'; reportId: string } | { name: 'builder' };
+type View =
+  | { name: 'home' }
+  | { name: 'editor'; reportId: string }
+  | { name: 'builder'; templateId?: string; keepId?: boolean };
 
 type Theme = 'light' | 'dark';
 
@@ -87,6 +91,34 @@ export default function App() {
     setView({ name: 'editor', reportId: report.id });
   };
 
+  // Duplicate an existing report as a fresh draft (fields copied; per-test
+  // specifics reset). Drawings start empty; add from the saved library.
+  const duplicateReport = async (reportId: string) => {
+    const orig = await getReport(reportId);
+    if (!orig) return;
+    const template = await getTemplateById(orig.templateId);
+    const values: Report['values'] = { ...orig.values };
+    for (const f of template?.fields ?? []) {
+      if (f.type === 'signature') delete values[f.key];
+      else if (f.type === 'photos') values[f.key] = [];
+      else if (f.default === 'today') values[f.key] = todayISO();
+      else if (f.default === 'now') values[f.key] = nowTime();
+    }
+    const report: Report = {
+      ...orig,
+      id: uid('rep_'),
+      values,
+      drawings: [],
+      drawing: null,
+      status: 'draft',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    await saveReport(report);
+    await refresh();
+    setView({ name: 'editor', reportId: report.id });
+  };
+
   const handleSaveTemplate = async (t: Template) => {
     await saveTemplate(t);
     await refresh();
@@ -135,7 +167,10 @@ export default function App() {
           projects={projects}
           onOpen={(id) => setView({ name: 'editor', reportId: id })}
           onNewReport={newReport}
+          onDuplicateReport={duplicateReport}
           onNewTemplate={() => setView({ name: 'builder' })}
+          onEditTemplate={(id) => setView({ name: 'builder', templateId: id, keepId: true })}
+          onDuplicateTemplate={(id) => setView({ name: 'builder', templateId: id, keepId: false })}
           onDeleteReport={handleDeleteReport}
           onDeleteTemplate={handleDeleteTemplate}
           onSavedDrawingsChanged={refresh}
@@ -147,7 +182,12 @@ export default function App() {
       )}
 
       {view.name === 'builder' && (
-        <TemplateBuilder onSave={handleSaveTemplate} onCancel={() => setView({ name: 'home' })} />
+        <TemplateBuilder
+          initial={view.templateId ? templates.find((t) => t.id === view.templateId) : undefined}
+          keepId={view.keepId}
+          onSave={handleSaveTemplate}
+          onCancel={() => setView({ name: 'home' })}
+        />
       )}
     </div>
   );

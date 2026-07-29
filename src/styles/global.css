@@ -232,6 +232,21 @@ select.text-input {
   color: var(--muted);
   font-size: 13px;
 }
+.req {
+  color: var(--danger);
+  font-weight: 700;
+}
+.field-error label {
+  color: var(--danger);
+}
+.field-error input[type='text'],
+.field-error input[type='date'],
+.field-error input[type='time'],
+.field-error textarea,
+.field-error .sig-pad {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 1px var(--danger);
+}
 
 /* --- Autofill prompt banner --- */
 .banner {

@@ -9,9 +9,11 @@ interface Props {
   template: Template;
   values: Record<string, FieldValue>;
   onChange: (key: string, value: FieldValue) => void;
+  /** field keys flagged as missing/required (highlighted red) */
+  errorKeys?: Set<string>;
 }
 
-export default function FormFields({ template, values, onChange }: Props) {
+export default function FormFields({ template, values, onChange, errorKeys }: Props) {
   return (
     <>
       {template.sections.map((section) => (
@@ -25,6 +27,7 @@ export default function FormFields({ template, values, onChange }: Props) {
                 key={key}
                 field={field}
                 value={values[key]}
+                error={errorKeys?.has(key)}
                 onChange={(v) => onChange(key, v)}
               />
             );
@@ -38,17 +41,21 @@ export default function FormFields({ template, values, onChange }: Props) {
 function FieldControl({
   field,
   value,
+  error,
   onChange,
 }: {
   field: FieldDef;
   value: FieldValue;
+  error?: boolean;
   onChange: (v: FieldValue) => void;
 }) {
+  const cls = `field${error ? ' field-error' : ''}`;
+  const req = field.required ? <span className="req"> *</span> : null;
   switch (field.type) {
     case 'multiline':
       return (
-        <div className="field">
-          <label>{field.label}</label>
+        <div className={cls}>
+          <label>{field.label}{req}</label>
           <textarea
             value={(value as string) ?? ''}
             onChange={(e) => onChange(e.target.value)}
@@ -57,8 +64,8 @@ function FieldControl({
       );
     case 'date':
       return (
-        <div className="field">
-          <label>{field.label}</label>
+        <div className={cls}>
+          <label>{field.label}{req}</label>
           <input
             type="date"
             value={(value as string) ?? ''}
@@ -68,8 +75,8 @@ function FieldControl({
       );
     case 'time':
       return (
-        <div className="field">
-          <label>{field.label}</label>
+        <div className={cls}>
+          <label>{field.label}{req}</label>
           <input
             type="time"
             value={(value as string) ?? ''}
@@ -81,8 +88,8 @@ function FieldControl({
       const v = (value as CheckboxPairValue) ?? { left: false, right: false };
       const opts = field.options ?? ['Option A', 'Option B'];
       return (
-        <div className="field">
-          <label>{field.label}</label>
+        <div className={cls}>
+          <label>{field.label}{req}</label>
           <div className="checkpair">
             <label>
               <input
@@ -106,8 +113,8 @@ function FieldControl({
     }
     case 'signature':
       return (
-        <div className="field">
-          <label>{field.label}</label>
+        <div className={cls}>
+          <label>{field.label}{req}</label>
           <SignaturePad
             value={value as string | undefined}
             onChange={(dataUrl) => onChange(dataUrl)}
@@ -123,8 +130,8 @@ function FieldControl({
       );
     default:
       return (
-        <div className="field">
-          <label>{field.label}</label>
+        <div className={cls}>
+          <label>{field.label}{req}</label>
           <input
             type="text"
             value={(value as string) ?? ''}

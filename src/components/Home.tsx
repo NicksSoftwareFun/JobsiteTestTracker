@@ -19,7 +19,10 @@ interface Props {
   projects: Project[];
   onOpen: (id: string) => void;
   onNewReport: (templateId: string) => void;
+  onDuplicateReport: (id: string) => void;
   onNewTemplate: () => void;
+  onEditTemplate: (id: string) => void;
+  onDuplicateTemplate: (id: string) => void;
   onDeleteReport: (id: string) => void;
   onDeleteTemplate: (id: string) => void;
   onSavedDrawingsChanged: () => void;
@@ -34,7 +37,10 @@ export default function Home({
   projects,
   onOpen,
   onNewReport,
+  onDuplicateReport,
   onNewTemplate,
+  onEditTemplate,
+  onDuplicateTemplate,
   onDeleteReport,
   onDeleteTemplate,
   onSavedDrawingsChanged,
@@ -166,6 +172,9 @@ export default function Home({
       <button className="btn sm" onClick={() => onOpen(r.id)}>
         Open
       </button>
+      <button className="btn sm" title="Start a new report from this one" onClick={() => onDuplicateReport(r.id)}>
+        Copy
+      </button>
       <button
         className="btn sm danger"
         onClick={() => {
@@ -259,6 +268,14 @@ export default function Home({
             </div>
             <button className="btn sm primary" onClick={() => onNewReport(t.id)}>
               Use
+            </button>
+            {!t.builtIn && (
+              <button className="btn sm" onClick={() => onEditTemplate(t.id)}>
+                Edit
+              </button>
+            )}
+            <button className="btn sm" title="Make an editable copy" onClick={() => onDuplicateTemplate(t.id)}>
+              Copy
             </button>
             {!t.builtIn && (
               <button

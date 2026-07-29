@@ -27,6 +27,8 @@ export interface FieldDef {
   /** 'project' fields are saved to the project and autofilled into new reports. */
   autofill: AutofillGroup;
   default?: DefaultValue;
+  /** must be filled before a report can be marked complete */
+  required?: boolean;
   /** Labels for the two boxes of a checkboxPair, e.g. ['FIELD', 'SHOP']. */
   options?: [string, string];
 }

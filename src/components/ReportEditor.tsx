@@ -41,6 +41,7 @@ export default function ReportEditor({ reportId, onBack }: Props) {
   const [savedNote, setSavedNote] = useState('');
   const [exportState, setExportState] = useState<{ bytes: Uint8Array; name: string } | null>(null);
   const [generating, setGenerating] = useState(false);
+  const [errorKeys, setErrorKeys] = useState<Set<string>>(new Set());
   const [activeIdx, setActiveIdx] = useState(0);
   const [pdfPickerFile, setPdfPickerFile] = useState<File | null>(null);
   const [showLibrary, setShowLibrary] = useState(false);
@@ -183,9 +184,23 @@ export default function ReportEditor({ reportId, onBack }: Props) {
     setSavedNote(`Saved admin data to "${name}" — it will autofill future reports.`);
   };
 
+  const isBlank = (v: FieldValue) =>
+    v == null ||
+    v === '' ||
+    (Array.isArray(v) && v.length === 0);
+
   const markSaved = async (status: Report['status']) => {
     const cur = reportRef.current;
-    if (!cur) return;
+    if (!cur || !template) return;
+    if (status === 'completed') {
+      const missing = template.fields.filter((f) => f.required && isBlank(cur.values[f.key]));
+      if (missing.length) {
+        setErrorKeys(new Set(missing.map((f) => f.key)));
+        setSavedNote(`Please fill required fields before completing: ${missing.map((f) => f.label).join(', ')}.`);
+        return;
+      }
+    }
+    setErrorKeys(new Set());
     const next = { ...cur, status, updatedAt: Date.now() };
     await saveReport(next);
     persist(next);
@@ -291,7 +306,7 @@ export default function ReportEditor({ reportId, onBack }: Props) {
       {savedNote && <p className="hint">{savedNote}</p>}
 
       {/* Schema-driven form */}
-      <FormFields template={template} values={report.values} onChange={setValue} />
+      <FormFields template={template} values={report.values} onChange={setValue} errorKeys={errorKeys} />
 
       {/* Drawing markup — one or more pages */}
       <div className="card">
