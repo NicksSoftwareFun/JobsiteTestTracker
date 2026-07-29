@@ -1,0 +1,60 @@
+name: Build downloadable site
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g. v0.1.0)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      # Relative base so the folder runs from any path / host (not just the
+      # GitHub Pages subpath).
+      - name: Build portable site
+        run: npx vite build --base=./
+      - name: Package zip
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+          cat > dist/HOW-TO-RUN.txt <<'TXT'
+          Warwick QC Test Reports - downloadable site
+          ===========================================
+
+          This is a static web app. To use it:
+
+          1) Host the contents of this folder on any web server (IIS, nginx,
+             Apache, SharePoint, Azure Static Web Apps, etc.), OR run a quick
+             local server from this folder, for example:
+                 npx serve .
+             then open the URL it prints.
+
+          2) Open the site in a browser. On an iPad, use Safari and choose
+             Share -> Add to Home Screen to install it like an app.
+
+          Note: opening index.html directly from disk (file://) may not work
+          because browsers block some features there - serve the folder instead.
+          Serve over HTTPS for install/offline and the OneDrive share feature.
+          TXT
+          cd dist && zip -r "../warwick-qc-site-$TAG.zip" .
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$TAG" "warwick-qc-site-$TAG.zip" \
+            --title "Warwick QC Test Reports $TAG" \
+            --notes "Downloadable build of the QC Test Reports site. Unzip and host the folder on any static web server (or add to an iPad home screen via Safari). See HOW-TO-RUN.txt inside the zip. Opening index.html directly from disk may not work; serve the folder instead." \
+            --target "$GITHUB_SHA"
