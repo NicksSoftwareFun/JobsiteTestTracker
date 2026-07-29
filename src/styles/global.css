@@ -343,6 +343,43 @@ select.text-input {
   margin-top: 0;
 }
 
+/* Export dialog: equal split-button rows */
+.btn-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.btn.block {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+.btn.disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+.linkbtn {
+  display: inline-block;
+  margin-top: 12px;
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.status-note {
+  margin-top: 14px;
+  padding: 10px 12px;
+  background: #eef2f7;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
 .grid-2 {
   display: grid;
   grid-template-columns: 1fr 1fr;

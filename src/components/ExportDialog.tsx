@@ -100,7 +100,8 @@ export default function ExportDialog({ pdfBytes, fileName, onClose }: Props) {
       const merged = await appendReportToLog(existing, pdfBytes);
       const outName = file.name.replace(/\.pdf$/i, '') + ' (updated).pdf';
       setMergedLog({ bytes: merged, name: outName });
-      setStatus(`Added this report to "${file.name}". Now tap Share or Save below to store the updated log.`);
+      // The inline text under the section already states this; keep status clear.
+      setStatus('');
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       const passwordProtected = /password|encrypt/i.test(msg);
@@ -122,79 +123,95 @@ export default function ExportDialog({ pdfBytes, fileName, onClose }: Props) {
           Combined PDF ready: <strong>{fileName}</strong>
         </p>
 
+        {/* Save THIS report: one split row of two equal actions */}
         <div className="card">
-          <h3>Upload to OneDrive</h3>
-          <p className="hint">
-            Opens the share sheet — choose the OneDrive app (or Files → OneDrive) to
-            store this report in your job folder.
-          </p>
-          <button className="btn primary" onClick={shareReport} disabled={busy}>
-            Share to OneDrive
-          </button>
+          <h3>Save this report</h3>
+          <div className="btn-split">
+            <button className="btn primary block" onClick={shareReport} disabled={busy}>
+              Share / OneDrive
+            </button>
+            <button className="btn navy block" onClick={saveToFiles} disabled={busy}>
+              Save to File
+            </button>
+          </div>
         </div>
 
+        {/* Append to an existing running log */}
         <div className="card">
           <h3>Append to existing PDF test log</h3>
-          <p className="hint">
-            Pick your running test-log PDF (from Files/OneDrive). This report's pages
-            are added to the end, producing an updated single-source-of-truth log.
-          </p>
-          <label className="btn navy">
-            {mergedLog ? 'Choose a different test log…' : 'Choose test log PDF…'}
-            <input
-              type="file"
-              accept="application/pdf"
-              style={{ display: 'none' }}
-              disabled={busy}
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) void mergeWithLog(f);
-                e.currentTarget.value = '';
-              }}
-            />
-          </label>
 
-          {mergedLog && (
-            <div className="row" style={{ marginTop: 10 }}>
-              <button
-                className="btn primary"
-                disabled={busy}
-                onClick={() =>
-                  shareOrDownload(
-                    mergedLog.bytes,
-                    mergedLog.name,
-                    `Shared "${mergedLog.name}". Save it back to the same OneDrive location.`,
-                  )
-                }
-              >
-                Share updated log
-              </button>
-              <button
-                className="btn"
-                disabled={busy}
-                onClick={() => {
-                  downloadBlob(bytesToBlob(mergedLog.bytes), mergedLog.name);
-                  setStatus(`Saved "${mergedLog.name}". Put it back in the same OneDrive location.`);
-                }}
-              >
-                Save updated log
-              </button>
-            </div>
+          {!mergedLog ? (
+            <>
+              <p className="hint">
+                Pick your running test-log PDF (from Files/OneDrive). This report's
+                pages are added to the end, producing an updated single-source-of-truth
+                log.
+              </p>
+              <label className={`btn navy block${busy ? ' disabled' : ''}`}>
+                {busy ? 'Working…' : 'Choose test log PDF…'}
+                <input
+                  type="file"
+                  accept="application/pdf"
+                  style={{ display: 'none' }}
+                  disabled={busy}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) void mergeWithLog(f);
+                    e.currentTarget.value = '';
+                  }}
+                />
+              </label>
+            </>
+          ) : (
+            <>
+              <p className="hint">
+                Added this report to <strong>{mergedLog.name}</strong>. Save the updated
+                log:
+              </p>
+              <div className="btn-split">
+                <button
+                  className="btn primary block"
+                  disabled={busy}
+                  onClick={() =>
+                    shareOrDownload(
+                      mergedLog.bytes,
+                      mergedLog.name,
+                      `Shared "${mergedLog.name}". Save it back to the same OneDrive location.`,
+                    )
+                  }
+                >
+                  Share / OneDrive
+                </button>
+                <button
+                  className="btn navy block"
+                  disabled={busy}
+                  onClick={() => {
+                    downloadBlob(bytesToBlob(mergedLog.bytes), mergedLog.name);
+                    setStatus(`Saved "${mergedLog.name}". Put it back in the same OneDrive location.`);
+                  }}
+                >
+                  Save to File
+                </button>
+              </div>
+              <label className="linkbtn">
+                ↺ Choose a different log
+                <input
+                  type="file"
+                  accept="application/pdf"
+                  style={{ display: 'none' }}
+                  disabled={busy}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) void mergeWithLog(f);
+                    e.currentTarget.value = '';
+                  }}
+                />
+              </label>
+            </>
           )}
         </div>
 
-        <div className="card">
-          <h3>Save to device / Files</h3>
-          <button className="btn" onClick={saveToFiles} disabled={busy}>
-            Save PDF
-          </button>
-        </div>
-
-        {status && (
-          <p className="hint" style={{ color: '#1b2733' }}>
-            {status}
-          </p>
-        )}
+        {status && <p className="status-note">{status}</p>}
 
         <div className="row" style={{ justifyContent: 'flex-end', marginTop: 8 }}>
           <button className="btn" onClick={onClose}>
