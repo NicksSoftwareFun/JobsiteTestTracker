@@ -403,3 +403,127 @@ select.text-input {
     grid-template-columns: 1fr 1fr;
   }
 }
+
+/* The theme toggle sits in the top-right corner of the header, always visible. */
+.theme-toggle {
+  white-space: nowrap;
+}
+
+/* ============================================================
+   Dark mode — dark grey surfaces with orange + yellow accents.
+   The whole app reads from these CSS variables, so re-pointing
+   them (plus a few component tweaks) flips the entire palette.
+   ============================================================ */
+:root[data-theme='dark'] {
+  --navy: #17191c; /* header / dark surfaces */
+  --navy-dark: #0f1113;
+  --accent: #f2892b; /* orange — primary actions */
+  --bg: #1e2023;
+  --card: #2a2d31;
+  --border: #3b4046;
+  --text: #ece6db;
+  --muted: #a0a5ac;
+  --danger: #ef6a4a;
+  --ok: #7fce8a;
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.55), 0 6px 16px rgba(0, 0, 0, 0.45);
+}
+
+/* Accent yellow used across dark mode */
+:root[data-theme='dark'] {
+  --yellow: #f4c531;
+}
+
+:root[data-theme='dark'] body {
+  background: var(--bg);
+}
+:root[data-theme='dark'] .btn {
+  background: #2f3339;
+  color: var(--text);
+  border-color: var(--border);
+}
+:root[data-theme='dark'] .btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #17191c;
+}
+:root[data-theme='dark'] .btn.navy {
+  background: var(--yellow);
+  border-color: var(--yellow);
+  color: #17191c;
+}
+:root[data-theme='dark'] .btn.ghost {
+  background: transparent;
+  border-color: rgba(244, 197, 49, 0.7);
+  color: var(--yellow);
+}
+:root[data-theme='dark'] .btn.danger {
+  background: #2f3339;
+  color: var(--danger);
+  border-color: var(--danger);
+}
+:root[data-theme='dark'] .modal {
+  background: var(--card);
+}
+:root[data-theme='dark'] .list-item {
+  background: #23262b;
+}
+:root[data-theme='dark'] input[type='text'],
+:root[data-theme='dark'] input[type='date'],
+:root[data-theme='dark'] input[type='time'],
+:root[data-theme='dark'] textarea,
+:root[data-theme='dark'] select,
+:root[data-theme='dark'] input.text-input,
+:root[data-theme='dark'] select.text-input {
+  background: #23262b;
+  color: var(--text);
+  border-color: var(--border);
+}
+:root[data-theme='dark'] .section-title {
+  color: var(--yellow);
+  border-color: var(--yellow);
+}
+:root[data-theme='dark'] .field label {
+  color: var(--yellow);
+}
+:root[data-theme='dark'] .badge {
+  background: #3b4046;
+  color: var(--yellow);
+}
+:root[data-theme='dark'] .badge.draft {
+  background: #3a3220;
+  color: var(--yellow);
+}
+:root[data-theme='dark'] .badge.completed {
+  background: #26362a;
+  color: var(--ok);
+}
+:root[data-theme='dark'] .banner {
+  background: #2e2820;
+  border-color: #5a4a28;
+}
+:root[data-theme='dark'] .status-note {
+  background: #2e2820;
+  border-color: #574a2c;
+  color: var(--text);
+}
+:root[data-theme='dark'] .linkbtn {
+  color: var(--yellow);
+}
+:root[data-theme='dark'] .drawing-wrap,
+:root[data-theme='dark'] .drawing-toolbar {
+  background: #23262b;
+  border-color: var(--border);
+}
+:root[data-theme='dark'] .tool-btn {
+  background: #2f3339;
+  color: var(--text);
+  border-color: var(--border);
+}
+:root[data-theme='dark'] .tool-btn.active {
+  background: var(--accent);
+  color: #17191c;
+  border-color: var(--accent);
+}
+:root[data-theme='dark'] .canvas-holder {
+  background: var(--card);
+}

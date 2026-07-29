@@ -13,6 +13,15 @@
     <meta name="apple-mobile-web-app-title" content="QC Reports" />
     <meta name="theme-color" content="#1f3a5f" />
     <title>Warwick QC Test Reports</title>
+    <script>
+      // Apply the saved theme before first paint to avoid a flash.
+      try {
+        document.documentElement.setAttribute(
+          'data-theme',
+          localStorage.getItem('qc-theme') || 'light',
+        );
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

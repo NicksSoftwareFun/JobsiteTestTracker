@@ -17,10 +17,20 @@ import sampleDrawingUrl from './data/sample-drawing.png';
 
 type View = { name: 'home' } | { name: 'editor'; reportId: string } | { name: 'builder' };
 
+type Theme = 'light' | 'dark';
+
 export default function App() {
   const [view, setView] = useState<View>({ name: 'home' });
   const [reports, setReports] = useState<Report[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
+  const [theme, setTheme] = useState<Theme>(
+    () => (localStorage.getItem('qc-theme') as Theme) || 'light',
+  );
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('qc-theme', theme);
+  }, [theme]);
 
   const refresh = useCallback(async () => {
     setReports(await getReports());
@@ -95,6 +105,13 @@ export default function App() {
       <header className="topbar">
         <span className="title">Warwick QC</span>
         <span className="spacer" />
+        <button
+          className="btn ghost sm theme-toggle"
+          onClick={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
+          aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+        >
+          {theme === 'dark' ? '☀️ Light' : '🌙 Dark'}
+        </button>
         {view.name !== 'home' && (
           <button className="btn ghost sm" onClick={goHome}>
             Home
