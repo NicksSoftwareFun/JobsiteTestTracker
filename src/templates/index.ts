@@ -5,8 +5,9 @@
 import type { FieldDef, Template } from '../types';
 import { getUserTemplates } from '../db';
 import { pressureTestRecord } from './pressureTestRecord';
+import { qcInspectionReport } from './qcInspectionReport';
 
-export const builtInTemplates: Template[] = [pressureTestRecord];
+export const builtInTemplates: Template[] = [pressureTestRecord, qcInspectionReport];
 
 export async function getAllTemplates(): Promise<Template[]> {
   const user = await getUserTemplates();

@@ -124,6 +124,7 @@ function FieldControl({
     case 'photos':
       return (
         <PhotoField
+          label={field.label}
           value={value as string[] | undefined}
           onChange={(photos) => onChange(photos)}
         />

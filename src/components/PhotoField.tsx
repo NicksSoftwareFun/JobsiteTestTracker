@@ -10,6 +10,7 @@ import { normalizePhotos } from '../utils';
 interface Props {
   value?: string[] | PhotoItem[];
   onChange: (photos: PhotoItem[]) => void;
+  label?: string;
 }
 
 // A coarse pointer (finger) is a good proxy for a phone/tablet with a usable
@@ -43,7 +44,7 @@ function compress(file: File, maxEdge = 1600, quality = 0.8): Promise<string> {
   });
 }
 
-export default function PhotoField({ value, onChange }: Props) {
+export default function PhotoField({ value, onChange, label = 'Attach Photos' }: Props) {
   const photos: PhotoItem[] = normalizePhotos(value);
   const galleryRef = useRef<HTMLInputElement | null>(null);
   const cameraRef = useRef<HTMLInputElement | null>(null);
@@ -67,7 +68,7 @@ export default function PhotoField({ value, onChange }: Props) {
 
   return (
     <div className="field">
-      <label>Attach Photos</label>
+      <label>{label}</label>
       <div className="row">
         <button className="btn sm" type="button" onClick={() => galleryRef.current?.click()}>
           🖼 Choose Photo
