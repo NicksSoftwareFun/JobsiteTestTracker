@@ -84,7 +84,7 @@ export const pressureTestRecord: Template = {
     // --- Sign-off ---
     { key: 'witnessSignature', label: 'Witnessed by WMG CQC', type: 'signature', autofill: 'perTest', required: true },
     { key: 'secondSignature', label: 'Additional Signature', type: 'signature', autofill: 'perTest' },
-    { key: 'fabShopManager', label: 'WMG Fab Shop Manager', type: 'text', autofill: 'perTest' },
+    { key: 'fabShopManager', label: 'Foreman/Supervisor', type: 'text', autofill: 'perTest' },
     { key: 'phone', label: 'Phone #', type: 'text', autofill: 'perTest' },
   ],
 };
