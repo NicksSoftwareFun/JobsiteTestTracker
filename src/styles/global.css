@@ -236,6 +236,68 @@ select.text-input {
   color: var(--danger);
   font-weight: 700;
 }
+
+/* --- Editable table field --- */
+.table-field {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+  background: var(--card);
+}
+.table-scroll {
+  overflow-x: auto;
+}
+.trow {
+  display: grid;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 6px;
+  min-width: 360px;
+}
+.trow.thead {
+  margin-bottom: 8px;
+}
+.trow.thead .tcell {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--navy);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 0 2px;
+}
+.tcell-input {
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 16px;
+  background: #fff;
+  color: var(--text);
+}
+.trow-del {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--danger);
+  cursor: pointer;
+}
+.table-totals {
+  display: flex;
+  gap: 16px;
+  font-size: 14px;
+  color: var(--text);
+  align-items: center;
+}
+:root[data-theme='dark'] .tcell-input {
+  background: #23262b;
+  color: var(--text);
+  border-color: var(--border);
+}
+:root[data-theme='dark'] .trow.thead .tcell {
+  color: var(--yellow);
+}
 .field-error label {
   color: var(--danger);
 }

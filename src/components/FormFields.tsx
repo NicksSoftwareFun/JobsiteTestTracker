@@ -1,6 +1,7 @@
-import type { CheckboxPairValue, FieldDef, FieldValue, Template } from '../types';
+import type { CheckboxPairValue, FieldDef, FieldValue, TableRow, Template } from '../types';
 import SignaturePad from './SignaturePad';
 import PhotoField from './PhotoField';
+import TableField from './TableField';
 
 // Generic, schema-driven form. Renders any Template's sections and fields, so
 // built-in and user-defined custom templates use the exact same UI.
@@ -127,6 +128,15 @@ function FieldControl({
           label={field.label}
           value={value as string[] | undefined}
           onChange={(photos) => onChange(photos)}
+        />
+      );
+    case 'table':
+      return (
+        <TableField
+          label={field.label}
+          columns={field.columns}
+          value={value as TableRow[] | undefined}
+          onChange={(rows) => onChange(rows)}
         />
       );
     default:

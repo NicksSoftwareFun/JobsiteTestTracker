@@ -12,7 +12,16 @@ export type FieldType =
   | 'time'
   | 'checkboxPair'
   | 'signature'
-  | 'photos';
+  | 'photos'
+  | 'table';
+
+/** A column in a 'table' field. numeric columns are summed into a total. */
+export interface TableColumn {
+  key: string;
+  label: string;
+  numeric?: boolean;
+}
+export type TableRow = Record<string, string>;
 
 /** Which block a field belongs to for autofill purposes. */
 export type AutofillGroup = 'project' | 'perTest';
@@ -31,6 +40,8 @@ export interface FieldDef {
   required?: boolean;
   /** Labels for the two boxes of a checkboxPair, e.g. ['FIELD', 'SHOP']. */
   options?: [string, string];
+  /** columns for a 'table' field */
+  columns?: TableColumn[];
 }
 
 export interface SectionDef {
@@ -55,7 +66,13 @@ export interface PhotoItem {
   src: string;
   caption?: string;
 }
-export type FieldValue = string | CheckboxPairValue | string[] | PhotoItem[] | undefined;
+export type FieldValue =
+  | string
+  | CheckboxPairValue
+  | string[]
+  | PhotoItem[]
+  | TableRow[]
+  | undefined;
 
 export interface DrawingState {
   /** stable id (used for React keys and per-page markup) */

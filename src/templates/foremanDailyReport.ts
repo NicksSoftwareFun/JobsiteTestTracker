@@ -23,7 +23,7 @@ export const foremanDailyReport: Template = {
     {
       id: 'labor',
       title: 'Warwick Labor On Site',
-      fieldKeys: ['warwickLabor', 'totalHours'],
+      fieldKeys: ['warwickLabor'],
     },
     {
       id: 'subs',
@@ -57,12 +57,31 @@ export const foremanDailyReport: Template = {
     { key: 'highLowTemp', label: 'High / Low Temp', type: 'text', autofill: 'perTest' },
     { key: 'precipitation', label: 'Precipitation', type: 'text', autofill: 'perTest' },
 
-    // Labor
-    { key: 'warwickLabor', label: 'Warwick Labor On Site (one per line: name — hours — notes)', type: 'multiline', autofill: 'perTest' },
-    { key: 'totalHours', label: 'Total Hours', type: 'text', autofill: 'perTest' },
+    // Labor (table with auto Total Hours)
+    {
+      key: 'warwickLabor',
+      label: 'Warwick Labor On Site',
+      type: 'table',
+      autofill: 'perTest',
+      columns: [
+        { key: 'name', label: 'Name' },
+        { key: 'hours', label: 'Hours', numeric: true },
+        { key: 'notes', label: 'Notes' },
+      ],
+    },
 
-    // Subcontractors
-    { key: 'subcontractorsOnSite', label: 'Subcontractors On Site (one per line: company — personnel count — notes)', type: 'multiline', autofill: 'perTest' },
+    // Subcontractors (table with auto total personnel)
+    {
+      key: 'subcontractorsOnSite',
+      label: 'Subcontractors On Site',
+      type: 'table',
+      autofill: 'perTest',
+      columns: [
+        { key: 'company', label: 'Company' },
+        { key: 'personnel', label: 'Personnel', numeric: true },
+        { key: 'notes', label: 'Notes' },
+      ],
+    },
 
     // Equipment
     { key: 'equipmentTests', label: 'Equipment / System Tests and Start-ups', type: 'multiline', autofill: 'perTest' },

@@ -6,7 +6,7 @@
 // Being schema-driven means custom templates render through the same path.
 
 import { PDFDocument, StandardFonts, rgb, type PDFFont } from 'pdf-lib';
-import type { CheckboxPairValue, DrawingState, PhotoItem, Report, Template } from '../types';
+import type { CheckboxPairValue, DrawingState, PhotoItem, Report, TableRow, Template } from '../types';
 import { displayDate, displayTime, normalizePhotos, reportDisplayName } from '../utils';
 import logoUrl from '../assets/warwick-logo.png';
 
@@ -229,6 +229,56 @@ export async function generateReportPdf({
           cell(SIMPLE_H, (x, top, w) =>
             labeledCell(x, top, w, field.label, n ? `${n} photo${n === 1 ? '' : 's'} attached (see end)` : 'None'),
           );
+          break;
+        }
+        case 'table': {
+          flushRow();
+          const cols = field.columns ?? [];
+          const rows = (Array.isArray(raw) ? raw : []) as TableRow[];
+          const rowH = 15;
+          ensure(20);
+          page.drawText(field.label, { x: MARGIN, y, size: 8.5, font: bold, color: NAVY });
+          y -= 14;
+          // column widths: numeric fixed, text share the remainder
+          const numW = 60;
+          const textCount = cols.filter((c) => !c.numeric).length || 1;
+          const textW = (contentW - cols.filter((c) => c.numeric).length * numW) / textCount;
+          const widths = cols.map((c) => (c.numeric ? numW : textW));
+          const colX: number[] = [];
+          let cx = MARGIN;
+          widths.forEach((w) => { colX.push(cx); cx += w; });
+          const line = (yy: number) =>
+            page.drawLine({ start: { x: MARGIN, y: yy }, end: { x: MARGIN + contentW, y: yy }, thickness: 0.5, color: LINE });
+          // header
+          ensure(rowH);
+          cols.forEach((c, i) => page.drawText(c.label, { x: colX[i] + 2, y: y - 10, size: 8, font: bold, color: BLACK }));
+          line(y - rowH + 1); y -= rowH;
+          // rows
+          for (const r of rows) {
+            ensure(rowH);
+            cols.forEach((c, i) => {
+              const t = ellipsize(String(r[c.key] ?? ''), font, 8, widths[i] - 4);
+              page.drawText(t, { x: colX[i] + 2, y: y - 10, size: 8, font, color: BLACK });
+            });
+            line(y - rowH + 1); y -= rowH;
+          }
+          // totals for numeric columns
+          const numCols = cols.filter((c) => c.numeric);
+          if (numCols.length) {
+            ensure(rowH);
+            page.drawText('Total', { x: MARGIN + 2, y: y - 10, size: 8, font: bold, color: BLACK });
+            numCols.forEach((c) => {
+              const idx = cols.findIndex((cc) => cc.key === c.key);
+              const sum = rows.reduce((a, r) => {
+                const n = parseFloat(String(r[c.key] ?? '').replace(/[^0-9.\-]/g, ''));
+                return a + (Number.isFinite(n) ? n : 0);
+              }, 0);
+              const s = Number.isInteger(sum) ? String(sum) : sum.toFixed(2);
+              page.drawText(s, { x: colX[idx] + 2, y: y - 10, size: 8, font: bold, color: BLACK });
+            });
+            y -= rowH;
+          }
+          y -= 6;
           break;
         }
         default:
