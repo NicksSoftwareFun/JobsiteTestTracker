@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { DrawingState, FieldValue, Project, Report, SavedDrawing, Template } from '../types';
 import {
+  deleteReport,
   getProject,
   getProjects,
   getReport,
@@ -9,9 +10,8 @@ import {
   saveReport,
 } from '../db';
 import { getTemplateById } from '../templates';
-import { reportDisplayName, safeFileName, uid } from '../utils';
-import { compositeDrawing } from '../pdf/composite';
-import { generateReportPdf } from '../pdf/generatePdf';
+import { uid } from '../utils';
+import { buildReportPdf } from '../pdf/report';
 import FormFields from './FormFields';
 import DrawingCanvas from './DrawingCanvas';
 import ExportDialog from './ExportDialog';
@@ -22,6 +22,32 @@ import SavedDrawingsPicker from './SavedDrawingsPicker';
 function normalizeDrawings(r: Report): DrawingState[] {
   const list = r.drawings ?? (r.drawing ? [r.drawing] : []);
   return list.map((d) => ({ ...d, id: d.id || uid('dr_') }));
+}
+
+/** A report is "empty/abandoned" if nothing was entered beyond auto-filled
+ *  date/time and the bundled sample drawing. Used to discard untouched reports. */
+function isReportEmpty(r: Report, template: Template): boolean {
+  if (r.reportTitle && r.reportTitle.trim()) return false;
+  for (const f of template.fields) {
+    const v = r.values[f.key];
+    if (f.type === 'date' || f.type === 'time') continue; // auto-filled
+    if (f.type === 'checkboxPair') {
+      const cv = v as { left?: boolean; right?: boolean } | undefined;
+      if (cv && (cv.left || cv.right)) return false;
+    } else if (f.type === 'photos') {
+      if (Array.isArray(v) && v.length) return false;
+    } else if (f.type === 'table') {
+      if (Array.isArray(v) && (v as Record<string, string>[]).some((row) => Object.values(row).some((c) => String(c).trim()))) return false;
+    } else if (typeof v === 'string' && v.trim()) {
+      return false; // text, multiline, signature
+    }
+  }
+  for (const d of r.drawings ?? []) {
+    if (d.name && d.name !== 'Sample drawing') return false; // user-added page
+    const j = d.fabricJson as { objects?: unknown[] } | null;
+    if (j && Array.isArray(j.objects) && j.objects.length) return false; // has markup
+  }
+  return true;
 }
 
 interface Props {
@@ -45,6 +71,9 @@ export default function ReportEditor({ reportId, onBack }: Props) {
   // canvas's fabric event listeners, bound once at mount) merge into the latest
   // state instead of an old closure.
   const reportRef = useRef<Report | null>(null);
+  // Once the user saves, completes, or generates, keep the report even if the
+  // field-emptiness check would consider it empty.
+  const keepRef = useRef(false);
   const activeIdxRef = useRef(0);
   useEffect(() => {
     activeIdxRef.current = activeIdx;
@@ -201,10 +230,25 @@ export default function ReportEditor({ reportId, onBack }: Props) {
       }
     }
     setErrorKeys(new Set());
+    keepRef.current = true;
     const next = { ...cur, status, updatedAt: Date.now() };
     await saveReport(next);
     persist(next);
     setSavedNote(status === 'completed' ? 'Marked complete & saved.' : 'Saved.');
+  };
+
+  // Discard the report if the user exits without entering anything.
+  const handleBack = async () => {
+    const cur = reportRef.current;
+    window.clearTimeout(saveTimer.current);
+    if (cur && template) {
+      if (!keepRef.current && isReportEmpty(cur, template)) {
+        await deleteReport(cur.id);
+      } else {
+        await saveReport(cur);
+      }
+    }
+    onBack();
   };
 
   const generate = async () => {
@@ -212,15 +256,9 @@ export default function ReportEditor({ reportId, onBack }: Props) {
     if (!cur || !template) return;
     setGenerating(true);
     try {
+      keepRef.current = true;
       await saveReport(cur);
-      // Composite each drawing page (background + markup) to a flat image.
-      const drawingImages: string[] = [];
-      for (const d of cur.drawings) {
-        if (d.backgroundDataUrl) drawingImages.push(await compositeDrawing(d));
-      }
-      const photosPerPage = Number(localStorage.getItem('qc-photosPerPage')) || 2;
-      const bytes = await generateReportPdf({ template, report: cur, drawingImages, photosPerPage });
-      const name = safeFileName(reportDisplayName(template.name, cur.reportTitle)) + '.pdf';
+      const { bytes, name } = await buildReportPdf(cur, template);
       setExportState({ bytes, name });
     } finally {
       setGenerating(false);
@@ -234,7 +272,7 @@ export default function ReportEditor({ reportId, onBack }: Props) {
   return (
     <div className="content">
       <div className="row" style={{ marginBottom: 12 }}>
-        <button className="btn sm" onClick={onBack}>
+        <button className="btn sm" onClick={handleBack}>
           ← Back
         </button>
         <span className="spacer" style={{ flex: 1 }} />

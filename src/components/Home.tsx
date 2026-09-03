@@ -20,6 +20,7 @@ interface Props {
   onOpen: (id: string) => void;
   onNewReport: (templateId: string) => void;
   onDuplicateReport: (id: string) => void;
+  onShareReport: (id: string) => void;
   onNewTemplate: () => void;
   onEditTemplate: (id: string) => void;
   onDuplicateTemplate: (id: string) => void;
@@ -38,6 +39,7 @@ export default function Home({
   onOpen,
   onNewReport,
   onDuplicateReport,
+  onShareReport,
   onNewTemplate,
   onEditTemplate,
   onDuplicateTemplate,
@@ -175,6 +177,9 @@ export default function Home({
       </button>
       <button className="btn sm" title="Start a new report from this one" onClick={() => onDuplicateReport(r.id)}>
         Copy
+      </button>
+      <button className="btn sm" title="Share / save this report's PDF" onClick={() => onShareReport(r.id)}>
+        Share
       </button>
       <button
         className="btn sm danger"

@@ -13,9 +13,11 @@ import { getAllTemplates, getTemplateById } from './templates';
 import { getReport } from './db';
 import { todayISO, nowTime, uid } from './utils';
 import { renderDrawingUrl } from './pdf/renderDrawing';
+import { buildReportPdf } from './pdf/report';
 import Home from './components/Home';
 import ReportEditor from './components/ReportEditor';
 import TemplateBuilder from './components/TemplateBuilder';
+import ExportDialog from './components/ExportDialog';
 import sampleDrawingUrl from './data/sample-drawing.png';
 
 type View =
@@ -31,6 +33,7 @@ export default function App() {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [savedDrawings, setSavedDrawings] = useState<SavedDrawing[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [shareExport, setShareExport] = useState<{ bytes: Uint8Array; name: string } | null>(null);
   const [theme, setTheme] = useState<Theme>(
     () => (localStorage.getItem('qc-theme') as Theme) || 'light',
   );
@@ -120,6 +123,16 @@ export default function App() {
     setView({ name: 'editor', reportId: report.id });
   };
 
+  // Share a report straight from the list (same as sharing from the editor).
+  const shareReport = async (id: string) => {
+    const r = await getReport(id);
+    if (!r) return;
+    const t = await getTemplateById(r.templateId);
+    if (!t) return;
+    const { bytes, name } = await buildReportPdf(r, t);
+    setShareExport({ bytes, name });
+  };
+
   const handleSaveTemplate = async (t: Template) => {
     await saveTemplate(t);
     await refresh();
@@ -153,7 +166,7 @@ export default function App() {
         >
           {theme === 'dark' ? '☀️ Light' : '🌙 Dark'}
         </button>
-        {view.name !== 'home' && (
+        {view.name === 'builder' && (
           <button className="btn ghost sm" onClick={goHome}>
             Home
           </button>
@@ -169,6 +182,7 @@ export default function App() {
           onOpen={(id) => setView({ name: 'editor', reportId: id })}
           onNewReport={newReport}
           onDuplicateReport={duplicateReport}
+          onShareReport={shareReport}
           onNewTemplate={() => setView({ name: 'builder' })}
           onEditTemplate={(id) => setView({ name: 'builder', templateId: id, keepId: true })}
           onDuplicateTemplate={(id) => setView({ name: 'builder', templateId: id, keepId: false })}
@@ -188,6 +202,14 @@ export default function App() {
           keepId={view.keepId}
           onSave={handleSaveTemplate}
           onCancel={() => setView({ name: 'home' })}
+        />
+      )}
+
+      {shareExport && (
+        <ExportDialog
+          pdfBytes={shareExport.bytes}
+          fileName={shareExport.name}
+          onClose={() => setShareExport(null)}
         />
       )}
     </div>
