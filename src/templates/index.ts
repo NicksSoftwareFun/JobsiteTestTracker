@@ -4,10 +4,16 @@
 
 import type { FieldDef, Template } from '../types';
 import { getUserTemplates } from '../db';
+import { foremanDailyReport } from './foremanDailyReport';
 import { pressureTestRecord } from './pressureTestRecord';
 import { qcInspectionReport } from './qcInspectionReport';
 
-export const builtInTemplates: Template[] = [pressureTestRecord, qcInspectionReport];
+// Foreman Daily Report first — the most-used form.
+export const builtInTemplates: Template[] = [
+  foremanDailyReport,
+  pressureTestRecord,
+  qcInspectionReport,
+];
 
 export async function getAllTemplates(): Promise<Template[]> {
   const user = await getUserTemplates();

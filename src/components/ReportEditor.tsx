@@ -33,7 +33,6 @@ export default function ReportEditor({ reportId, onBack }: Props) {
   const [report, setReport] = useState<Report | null>(null);
   const [template, setTemplate] = useState<Template | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
-  const [projectName, setProjectName] = useState('');
   const [savedNote, setSavedNote] = useState('');
   const [exportState, setExportState] = useState<{ bytes: Uint8Array; name: string } | null>(null);
   const [generating, setGenerating] = useState(false);
@@ -62,10 +61,6 @@ export default function ReportEditor({ reportId, onBack }: Props) {
       setActiveIdx(0);
       setTemplate((await getTemplateById(r.templateId)) ?? null);
       setProjects(await getProjects());
-      if (r.projectId) {
-        const p = await getProject(r.projectId);
-        if (p) setProjectName(p.name);
-      }
     })();
   }, [reportId]);
 
@@ -165,14 +160,17 @@ export default function ReportEditor({ reportId, onBack }: Props) {
       if (merged[k] == null || merged[k] === '') merged[k] = p.adminValues[k];
     }
     persist({ ...cur, projectId: p.id, values: merged, updatedAt: Date.now() });
-    setProjectName(p.name);
     setSavedNote(`Autofilled admin data from "${p.name}".`);
   };
 
   const saveAdminData = async () => {
     const cur = reportRef.current;
     if (!cur) return;
-    const name = projectName.trim() || String(cur.values['jobNumber'] ?? '') || 'Untitled project';
+    // Name the saved job by Project Name, then Job Number.
+    const name =
+      String(cur.values['projectName'] ?? '').trim() ||
+      String(cur.values['jobNumber'] ?? '').trim() ||
+      'Untitled project';
     let project = projects.find((p) => p.name === name) ?? (cur.projectId ? await getProject(cur.projectId) : undefined);
     if (!project) {
       project = { id: uid('proj_'), name, adminValues: {}, updatedAt: Date.now() };
@@ -266,37 +264,26 @@ export default function ReportEditor({ reportId, onBack }: Props) {
         </div>
       </div>
 
-      {/* Project selector + admin autofill */}
+      {/* Load saved job data (admin autofill) */}
       <div className="card">
-        <div className="section-title">Project</div>
-        <div className="grid-2">
-          <div className="field">
-            <label>Project name</label>
-            <input
-              type="text"
-              value={projectName}
-              onChange={(e) => setProjectName(e.target.value)}
-              placeholder="e.g. Smithfield VA — Job 3193"
-            />
-          </div>
-          <div className="field">
-            <label>Load saved project</label>
-            <select
-              className="text-input"
-              value={report.projectId ?? ''}
-              onChange={(e) => {
-                const p = projects.find((x) => x.id === e.target.value);
-                if (p) void applyProjectAdmin(p);
-              }}
-            >
-              <option value="">— none —</option>
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          </div>
+        <div className="section-title">Load Saved Job</div>
+        <div className="field" style={{ maxWidth: 360, marginBottom: 0 }}>
+          <label>Autofill admin data from a saved job</label>
+          <select
+            className="text-input"
+            value={report.projectId ?? ''}
+            onChange={(e) => {
+              const p = projects.find((x) => x.id === e.target.value);
+              if (p) void applyProjectAdmin(p);
+            }}
+          >
+            <option value="">— none —</option>
+            {projects.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -305,8 +292,8 @@ export default function ReportEditor({ reportId, onBack }: Props) {
         <div className="spacer" style={{ flex: 1 }}>
           <strong>Save admin data to autofill later?</strong>
           <div className="hint">
-            Stores Job Number, PM, contractors, and drawing # for this project so your
-            next report fills them in automatically.
+            Stores Project Name, Job Number, General Contractor, and Project Manager
+            for this job so every form autofills them automatically.
           </div>
         </div>
         <button className="btn sm primary" onClick={saveAdminData}>

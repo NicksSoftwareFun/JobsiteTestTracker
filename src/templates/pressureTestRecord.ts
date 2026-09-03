@@ -1,10 +1,9 @@
 import type { Template } from '../types';
+import { adminFields, adminSection } from './adminBlock';
 
-// First built-in template — a faithful digital recreation of the Warwick
-// Mechanical Group "PRESSURE TEST RECORD" paper form.
-//
-// The admin block (autofill: 'project') is saved to the project and autofilled
-// into future reports. Date/Start Time default to the current day/time.
+// First built-in template — a digital recreation of the Warwick "PRESSURE TEST
+// RECORD" form. Uses the shared admin block; contract details and test details
+// are form-specific sections.
 
 export const pressureTestRecord: Template = {
   id: 'builtin.pressure-test-record',
@@ -12,16 +11,11 @@ export const pressureTestRecord: Template = {
   builtIn: true,
   createdAt: 0,
   sections: [
+    adminSection,
     {
-      id: 'admin',
-      title: 'Project / Administrative',
-      fieldKeys: [
-        'jobNumber',
-        'projectManager',
-        'generalContractor',
-        'contractorPresent',
-        'contractDrawing',
-      ],
+      id: 'contract',
+      title: 'Contract Information',
+      fieldKeys: ['contractorPresent', 'contractDrawing'],
     },
     {
       id: 'test',
@@ -48,21 +42,15 @@ export const pressureTestRecord: Template = {
     {
       id: 'signoff',
       title: 'Sign-off',
-      fieldKeys: [
-        'witnessSignature',
-        'secondSignature',
-        'fabShopManager',
-        'phone',
-      ],
+      fieldKeys: ['witnessSignature', 'secondSignature', 'fabShopManager', 'phone'],
     },
   ],
   fields: [
-    // --- Administrative block (saved per project, autofilled) ---
-    { key: 'jobNumber', label: 'Job Number', type: 'text', autofill: 'project', required: true },
-    { key: 'projectManager', label: 'Project Manager', type: 'text', autofill: 'project' },
-    { key: 'generalContractor', label: 'General Contractor', type: 'text', autofill: 'project' },
-    { key: 'contractorPresent', label: 'Contractor or Vendor Present', type: 'text', autofill: 'project' },
-    { key: 'contractDrawing', label: 'Contract Drawing #', type: 'text', autofill: 'project' },
+    ...adminFields,
+
+    // --- Contract info (form-specific) ---
+    { key: 'contractorPresent', label: 'Contractor or Vendor Present', type: 'text', autofill: 'perTest' },
+    { key: 'contractDrawing', label: 'Contract Drawing #', type: 'text', autofill: 'perTest' },
 
     // --- Test details (per test) ---
     { key: 'date', label: 'Date', type: 'date', autofill: 'perTest', default: 'today', required: true },

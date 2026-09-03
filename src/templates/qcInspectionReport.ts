@@ -1,8 +1,9 @@
 import type { Template } from '../types';
+import { adminFields, adminSection } from './adminBlock';
 
 // Built-in template derived from the Warwick "Quality Control Inspection Report"
-// Word form. Admin fields (autofill: 'project') are saved per project and
-// autofilled into new inspections.
+// Word form. Uses the shared admin block; inspector/subcontractor and inspection
+// details are form-specific sections.
 
 export const qcInspectionReport: Template = {
   id: 'builtin.qc-inspection-report',
@@ -10,22 +11,14 @@ export const qcInspectionReport: Template = {
   builtIn: true,
   createdAt: 1,
   sections: [
-    {
-      id: 'admin',
-      title: 'Project / Administrative',
-      fieldKeys: [
-        'projectName',
-        'jobNumber',
-        'subcontractor',
-        'projectManagers',
-        'qcInspectorName',
-        'qcInspectorEmail',
-      ],
-    },
+    adminSection,
     {
       id: 'details',
       title: 'Inspection Details',
       fieldKeys: [
+        'subcontractor',
+        'qcInspectorName',
+        'qcInspectorEmail',
         'date',
         'inspectionNumber',
         'scopeOfWork',
@@ -56,15 +49,12 @@ export const qcInspectionReport: Template = {
     },
   ],
   fields: [
-    // --- Administrative (saved per project, autofilled) ---
-    { key: 'projectName', label: 'Project Name', type: 'text', autofill: 'project' },
-    { key: 'jobNumber', label: 'Job #', type: 'text', autofill: 'project', required: true },
-    { key: 'subcontractor', label: 'Subcontractor', type: 'text', autofill: 'project' },
-    { key: 'projectManagers', label: 'Project Managers', type: 'text', autofill: 'project' },
-    { key: 'qcInspectorName', label: 'QC Inspector Name', type: 'text', autofill: 'project' },
-    { key: 'qcInspectorEmail', label: 'QC Inspector Email', type: 'text', autofill: 'project' },
+    ...adminFields,
 
-    // --- Inspection details (per inspection) ---
+    // --- Inspection details (form-specific) ---
+    { key: 'subcontractor', label: 'Subcontractor', type: 'text', autofill: 'perTest' },
+    { key: 'qcInspectorName', label: 'QC Inspector Name', type: 'text', autofill: 'perTest' },
+    { key: 'qcInspectorEmail', label: 'QC Inspector Email', type: 'text', autofill: 'perTest' },
     { key: 'date', label: 'Date', type: 'date', autofill: 'perTest', default: 'today', required: true },
     { key: 'inspectionNumber', label: 'QC Inspection Number', type: 'text', autofill: 'perTest' },
     { key: 'scopeOfWork', label: 'Scope of Work', type: 'text', autofill: 'perTest' },
