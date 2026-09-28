@@ -12,6 +12,7 @@ import {
 import { getTemplateById } from '../templates';
 import { uid } from '../utils';
 import { buildReportPdf } from '../pdf/report';
+import { printPdfBytes } from '../pdf/print';
 import FormFields from './FormFields';
 import DrawingCanvas from './DrawingCanvas';
 import ExportDialog from './ExportDialog';
@@ -62,6 +63,7 @@ export default function ReportEditor({ reportId, onBack }: Props) {
   const [savedNote, setSavedNote] = useState('');
   const [exportState, setExportState] = useState<{ bytes: Uint8Array; name: string } | null>(null);
   const [generating, setGenerating] = useState(false);
+  const [printing, setPrinting] = useState(false);
   const [errorKeys, setErrorKeys] = useState<Set<string>>(new Set());
   const [activeIdx, setActiveIdx] = useState(0);
   const [pdfPickerFile, setPdfPickerFile] = useState<File | null>(null);
@@ -265,6 +267,21 @@ export default function ReportEditor({ reportId, onBack }: Props) {
     }
   };
 
+  // Build the same PDF and hand it to the device's built-in print function.
+  const printReport = async () => {
+    const cur = reportRef.current;
+    if (!cur || !template) return;
+    setPrinting(true);
+    try {
+      keepRef.current = true;
+      await saveReport(cur);
+      const { bytes } = await buildReportPdf(cur, template);
+      printPdfBytes(bytes);
+    } finally {
+      setPrinting(false);
+    }
+  };
+
   if (!report || !template) {
     return <div className="content">Loading…</div>;
   }
@@ -285,6 +302,9 @@ export default function ReportEditor({ reportId, onBack }: Props) {
         </button>
         <button className="btn sm primary" onClick={generate} disabled={generating}>
           {generating ? 'Generating…' : 'Generate PDF'}
+        </button>
+        <button className="btn sm" onClick={printReport} disabled={printing} title="Print using your device's built-in printer / AirPrint">
+          {printing ? 'Preparing…' : '🖨 Print'}
         </button>
       </div>
 
