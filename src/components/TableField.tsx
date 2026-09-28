@@ -1,13 +1,20 @@
-import type { TableColumn, TableRow } from '../types';
+import { useState } from 'react';
+import type { SavedList, TableColumn, TableRow } from '../types';
 
 // A simple editable table: fixed columns, add/remove rows, and an auto total
-// for any numeric column (e.g. Total Hours).
+// for any numeric column (e.g. Total Hours). When save/load handlers are
+// provided, the current rows can be saved as a named list (e.g. a crew roster)
+// and reloaded into any report independently of the admin data.
 
 interface Props {
   label: string;
   columns?: TableColumn[];
   value?: TableRow[];
   onChange: (rows: TableRow[]) => void;
+  /** saved named lists for this table field (enables the save/load toolbar) */
+  savedLists?: SavedList[];
+  onSaveList?: (name: string, rows: TableRow[]) => void;
+  onDeleteList?: (id: string) => void;
 }
 
 const DEFAULT_COLUMNS: TableColumn[] = [
@@ -27,9 +34,47 @@ function fmt(n: number): string {
   return Number.isInteger(n) ? String(n) : n.toFixed(2);
 }
 
-export default function TableField({ label, columns = DEFAULT_COLUMNS, value, onChange }: Props) {
+export default function TableField({
+  label,
+  columns = DEFAULT_COLUMNS,
+  value,
+  onChange,
+  savedLists,
+  onSaveList,
+  onDeleteList,
+}: Props) {
+  const [selectedListId, setSelectedListId] = useState('');
   const rows: TableRow[] = Array.isArray(value) && value.every((r) => typeof r === 'object') ? value : [];
   const display = rows.length ? rows : [{}];
+
+  // A row is "real" if any cell has content — used to avoid saving an empty list.
+  const nonEmptyRows = rows.filter((r) => Object.values(r).some((c) => String(c ?? '').trim()));
+  const savingEnabled = !!onSaveList;
+
+  const handleSave = () => {
+    if (!onSaveList) return;
+    if (!nonEmptyRows.length) {
+      alert('Add at least one row before saving this list.');
+      return;
+    }
+    const name = prompt(`Save "${label}" as a named list (e.g. "Day crew"):`)?.trim();
+    if (name) onSaveList(name, nonEmptyRows);
+  };
+
+  const handleLoad = (id: string) => {
+    setSelectedListId(id);
+    const list = savedLists?.find((l) => l.id === id);
+    if (list) onChange(list.rows.map((r) => ({ ...r })));
+  };
+
+  const handleDelete = () => {
+    if (!onDeleteList || !selectedListId) return;
+    const list = savedLists?.find((l) => l.id === selectedListId);
+    if (list && confirm(`Delete saved list "${list.name}"?`)) {
+      onDeleteList(selectedListId);
+      setSelectedListId('');
+    }
+  };
 
   const setCell = (rowIdx: number, key: string, v: string) => {
     const next = display.map((r, i) => (i === rowIdx ? { ...r, [key]: v } : r));
@@ -47,6 +92,34 @@ export default function TableField({ label, columns = DEFAULT_COLUMNS, value, on
   return (
     <div className="field">
       <label>{label}</label>
+
+      {savingEnabled && (
+        <div className="row" style={{ gap: 8, marginBottom: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <select
+            className="text-input"
+            style={{ maxWidth: 220 }}
+            value={selectedListId}
+            onChange={(e) => handleLoad(e.target.value)}
+          >
+            <option value="">Load saved list…</option>
+            {(savedLists ?? []).map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.name} ({l.rows.length})
+              </option>
+            ))}
+          </select>
+          {selectedListId && onDeleteList && (
+            <button className="btn sm danger" type="button" onClick={handleDelete} title="Delete the selected saved list">
+              Delete saved
+            </button>
+          )}
+          <span className="spacer" style={{ flex: 1 }} />
+          <button className="btn sm navy" type="button" onClick={handleSave}>
+            💾 Save list
+          </button>
+        </div>
+      )}
+
       <div className="table-field">
         <div className="table-scroll">
           <div className="trow thead" style={{ gridTemplateColumns: gridCols }}>

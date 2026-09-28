@@ -27,7 +27,7 @@ export type TableRow = Record<string, string>;
 export type AutofillGroup = 'project' | 'perTest';
 
 /** Auto-populated default for a new report. */
-export type DefaultValue = 'today' | 'now' | null;
+export type DefaultValue = 'today' | 'now' | 'weekday' | null;
 
 export interface FieldDef {
   key: string;
@@ -85,6 +85,18 @@ export interface DrawingState {
   bgHeight: number;
   /** fabric.js serialized markup (highlights, text boxes, arrows) */
   fabricJson: unknown | null;
+}
+
+/** A reusable, named set of table rows (e.g. a labor crew roster or a
+ *  subcontractor list) saved to the on-device library. Keyed by the table
+ *  field it belongs to so each table has its own independent library. */
+export interface SavedList {
+  id: string;
+  /** the table field key this list is for, e.g. 'warwickLabor' */
+  fieldKey: string;
+  name: string;
+  rows: TableRow[];
+  createdAt: number;
 }
 
 /** A reusable drawing page saved to the on-device library (like a template). */

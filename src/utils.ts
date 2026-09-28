@@ -50,6 +50,11 @@ export function todayISO(): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
+/** Full weekday name for today, e.g. "Monday". Autofilled like the date. */
+export function todayWeekday(): string {
+  return new Date().toLocaleDateString(undefined, { weekday: 'long' });
+}
+
 /** HH:MM (24h) for <input type="time"> */
 export function nowTime(): string {
   const d = new Date();

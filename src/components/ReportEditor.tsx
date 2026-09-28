@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { DrawingState, FieldValue, Project, Report, SavedDrawing, Template } from '../types';
+import type { DrawingState, FieldValue, Project, Report, SavedDrawing, SavedList, TableRow, Template } from '../types';
 import {
   deleteReport,
+  deleteSavedList,
   getProject,
   getProjects,
   getReport,
+  getSavedLists,
   saveDrawing,
+  saveList,
   saveProject,
   saveReport,
 } from '../db';
@@ -60,6 +63,7 @@ export default function ReportEditor({ reportId, onBack }: Props) {
   const [report, setReport] = useState<Report | null>(null);
   const [template, setTemplate] = useState<Template | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [savedLists, setSavedLists] = useState<SavedList[]>([]);
   const [savedNote, setSavedNote] = useState('');
   const [exportState, setExportState] = useState<{ bytes: Uint8Array; name: string } | null>(null);
   const [generating, setGenerating] = useState(false);
@@ -92,13 +96,27 @@ export default function ReportEditor({ reportId, onBack }: Props) {
       setActiveIdx(0);
       setTemplate((await getTemplateById(r.templateId)) ?? null);
       setProjects(await getProjects());
+      setSavedLists(await getSavedLists());
     })();
   }, [reportId]);
 
-  const adminKeys = useMemo(
-    () => (template ? template.fields.filter((f) => f.autofill === 'project').map((f) => f.key) : []),
+  // Save the current rows of a table field as a named, reusable list.
+  const handleSaveList = async (fieldKey: string, name: string, rows: TableRow[]) => {
+    await saveList({ id: uid('list_'), fieldKey, name, rows, createdAt: Date.now() });
+    setSavedLists(await getSavedLists());
+    setSavedNote(`Saved list "${name}".`);
+  };
+
+  const handleDeleteList = async (id: string) => {
+    await deleteSavedList(id);
+    setSavedLists(await getSavedLists());
+  };
+
+  const adminFields = useMemo(
+    () => (template ? template.fields.filter((f) => f.autofill === 'project') : []),
     [template],
   );
+  const adminKeys = useMemo(() => adminFields.map((f) => f.key), [adminFields]);
 
   // autosave (debounced). All mutations flow through here and update reportRef
   // synchronously so stale child callbacks still merge into the latest report.
@@ -350,8 +368,8 @@ export default function ReportEditor({ reportId, onBack }: Props) {
         <div className="spacer" style={{ flex: 1 }}>
           <strong>Save admin data to autofill later?</strong>
           <div className="hint">
-            Stores Project Name, Job Number, General Contractor, and Project Manager
-            for this job so every form autofills them automatically.
+            Stores {adminFields.map((f) => f.label).join(', ')} for this job so
+            future reports autofill them automatically.
           </div>
         </div>
         <button className="btn sm primary" onClick={saveAdminData}>
@@ -362,7 +380,15 @@ export default function ReportEditor({ reportId, onBack }: Props) {
       {savedNote && <p className="hint">{savedNote}</p>}
 
       {/* Schema-driven form */}
-      <FormFields template={template} values={report.values} onChange={setValue} errorKeys={errorKeys} />
+      <FormFields
+        template={template}
+        values={report.values}
+        onChange={setValue}
+        errorKeys={errorKeys}
+        savedLists={savedLists}
+        onSaveList={handleSaveList}
+        onDeleteList={handleDeleteList}
+      />
 
       {/* Drawing markup — one or more pages */}
       <div className="card">

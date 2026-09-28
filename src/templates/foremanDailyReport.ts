@@ -36,6 +36,11 @@ export const foremanDailyReport: Template = {
       fieldKeys: ['equipmentTests'],
     },
     {
+      id: 'notes',
+      title: 'General Notes',
+      fieldKeys: ['generalNotes'],
+    },
+    {
       id: 'photos',
       title: 'Photographic Record',
       fieldKeys: ['photos'],
@@ -52,12 +57,13 @@ export const foremanDailyReport: Template = {
     // Daily header
     { key: 'date', label: 'Date', type: 'date', autofill: 'perTest', default: 'today', required: true },
     { key: 'foreman', label: 'Foreman', type: 'text', autofill: 'perTest' },
-    { key: 'dayOfWeek', label: 'Day of the Week', type: 'text', autofill: 'perTest' },
+    { key: 'dayOfWeek', label: 'Day of the Week', type: 'text', autofill: 'perTest', default: 'weekday' },
     { key: 'weather', label: 'Weather', type: 'text', autofill: 'perTest' },
     { key: 'highLowTemp', label: 'High / Low Temp', type: 'text', autofill: 'perTest' },
     { key: 'precipitation', label: 'Precipitation', type: 'text', autofill: 'perTest' },
 
-    // Labor (table with auto Total Hours)
+    // Labor (table with auto Total Hours). Can be saved/loaded as a named list
+    // (crew roster) independently of the admin data.
     {
       key: 'warwickLabor',
       label: 'Warwick Labor On Site',
@@ -70,7 +76,8 @@ export const foremanDailyReport: Template = {
       ],
     },
 
-    // Subcontractors (table with auto total personnel)
+    // Subcontractors (table with auto total personnel). Can be saved/loaded as a
+    // named list independently of the admin data.
     {
       key: 'subcontractorsOnSite',
       label: 'Subcontractors On Site',
@@ -85,6 +92,9 @@ export const foremanDailyReport: Template = {
 
     // Equipment
     { key: 'equipmentTests', label: 'Equipment / System Tests and Start-ups', type: 'multiline', autofill: 'perTest' },
+
+    // General notes (large free-text area below Equipment / System)
+    { key: 'generalNotes', label: 'General Notes', type: 'multiline', autofill: 'perTest' },
 
     // Photos + sign-off
     { key: 'photos', label: 'Photographic Record(s)', type: 'photos', autofill: 'perTest' },

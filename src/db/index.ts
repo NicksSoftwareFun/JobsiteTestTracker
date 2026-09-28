@@ -3,13 +3,14 @@
 // on-device "local storage" layer; finished PDFs are exported out to OneDrive.
 
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
-import type { Project, Report, SavedDrawing, Template } from '../types';
+import type { Project, Report, SavedDrawing, SavedList, Template } from '../types';
 
 interface QCDB extends DBSchema {
   projects: { key: string; value: Project };
   reports: { key: string; value: Report; indexes: { byUpdated: number } };
   templates: { key: string; value: Template };
   drawings: { key: string; value: SavedDrawing };
+  lists: { key: string; value: SavedList };
   settings: { key: string; value: unknown };
 }
 
@@ -17,7 +18,7 @@ let dbPromise: Promise<IDBPDatabase<QCDB>> | null = null;
 
 function getDB() {
   if (!dbPromise) {
-    dbPromise = openDB<QCDB>('qc-test-tracker', 2, {
+    dbPromise = openDB<QCDB>('qc-test-tracker', 3, {
       upgrade(db, oldVersion) {
         if (oldVersion < 1) {
           db.createObjectStore('projects', { keyPath: 'id' });
@@ -28,6 +29,9 @@ function getDB() {
         }
         if (oldVersion < 2) {
           db.createObjectStore('drawings', { keyPath: 'id' });
+        }
+        if (oldVersion < 3) {
+          db.createObjectStore('lists', { keyPath: 'id' });
         }
       },
     });
@@ -86,6 +90,20 @@ export async function deleteSavedDrawing(id: string) {
   await (await getDB()).delete('drawings', id);
 }
 
+// --- Saved lists library (labor rosters, subcontractor lists, etc.) ---
+export async function getSavedLists(fieldKey?: string): Promise<SavedList[]> {
+  const db = await getDB();
+  const all = await db.getAll('lists');
+  const filtered = fieldKey ? all.filter((l) => l.fieldKey === fieldKey) : all;
+  return filtered.sort((a, b) => b.createdAt - a.createdAt);
+}
+export async function saveList(l: SavedList) {
+  await (await getDB()).put('lists', l);
+}
+export async function deleteSavedList(id: string) {
+  await (await getDB()).delete('lists', id);
+}
+
 // --- Settings ---
 export async function getSetting<T>(key: string): Promise<T | undefined> {
   return (await getDB()).get('settings', key) as Promise<T | undefined>;
@@ -103,33 +121,36 @@ export interface BackupData {
   reports: Report[];
   templates: Template[];
   drawings: SavedDrawing[];
+  lists?: SavedList[];
   settings: { key: string; value: unknown }[];
 }
 
 export async function exportAllData(): Promise<BackupData> {
   const db = await getDB();
-  const [projects, reports, templates, drawings] = await Promise.all([
+  const [projects, reports, templates, drawings, lists] = await Promise.all([
     db.getAll('projects'),
     db.getAll('reports'),
     db.getAll('templates'),
     db.getAll('drawings'),
+    db.getAll('lists'),
   ]);
   const settingKeys = await db.getAllKeys('settings');
   const settings = await Promise.all(
     settingKeys.map(async (k) => ({ key: String(k), value: await db.get('settings', k) })),
   );
-  return { app: 'warwick-qc', version: 1, exportedAt: Date.now(), projects, reports, templates, drawings, settings };
+  return { app: 'warwick-qc', version: 2, exportedAt: Date.now(), projects, reports, templates, drawings, lists, settings };
 }
 
 export async function importAllData(data: BackupData, mode: 'merge' | 'replace') {
   const db = await getDB();
-  const tx = db.transaction(['projects', 'reports', 'templates', 'drawings', 'settings'], 'readwrite');
+  const tx = db.transaction(['projects', 'reports', 'templates', 'drawings', 'lists', 'settings'], 'readwrite');
   if (mode === 'replace') {
     await Promise.all([
       tx.objectStore('projects').clear(),
       tx.objectStore('reports').clear(),
       tx.objectStore('templates').clear(),
       tx.objectStore('drawings').clear(),
+      tx.objectStore('lists').clear(),
       tx.objectStore('settings').clear(),
     ]);
   }
@@ -139,6 +160,7 @@ export async function importAllData(data: BackupData, mode: 'merge' | 'replace')
     if (!t.builtIn) await tx.objectStore('templates').put(t); // built-ins live in code
   }
   for (const d of data.drawings ?? []) await tx.objectStore('drawings').put(d);
+  for (const l of data.lists ?? []) await tx.objectStore('lists').put(l);
   for (const s of data.settings ?? []) await tx.objectStore('settings').put(s.value, s.key);
   await tx.done;
 }
