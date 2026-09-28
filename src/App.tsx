@@ -27,6 +27,26 @@ type View =
 
 type Theme = 'light' | 'dark';
 
+// "Give Feedback" opens the device's default mail app with a prefilled message
+// addressed to the developer. Shown in the top bar on every screen.
+const FEEDBACK_EMAIL = 'nvanriper@wphcorp.com';
+const FEEDBACK_SUBJECT = 'Warwick QC Test Reports — Feedback';
+const FEEDBACK_BODY = [
+  'Thanks for trying the Warwick QC Test Reports app. Please share your feedback below:',
+  '',
+  'What works well:',
+  '',
+  'What could be improved / bugs:',
+  '',
+  'Feature requests:',
+  '',
+  '',
+  '(Device / iPad model, if relevant:)',
+].join('\n');
+const feedbackMailto = `mailto:${FEEDBACK_EMAIL}?subject=${encodeURIComponent(
+  FEEDBACK_SUBJECT,
+)}&body=${encodeURIComponent(FEEDBACK_BODY)}`;
+
 export default function App() {
   const [view, setView] = useState<View>({ name: 'home' });
   const [reports, setReports] = useState<Report[]>([]);
@@ -159,6 +179,13 @@ export default function App() {
       <header className="topbar">
         <span className="title">Warwick QC</span>
         <span className="spacer" />
+        <a
+          className="btn ghost sm"
+          href={feedbackMailto}
+          title="Email feedback to the developer"
+        >
+          ✉ Feedback
+        </a>
         <button
           className="btn ghost sm theme-toggle"
           onClick={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
