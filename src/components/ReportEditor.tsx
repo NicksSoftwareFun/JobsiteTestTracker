@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { DrawingState, FieldValue, Project, Report, SavedDrawing, Template } from '../types';
+import type { Attachment, DrawingState, FieldValue, Project, Report, SavedDrawing, SavedList, TableRow, Template } from '../types';
 import {
   deleteReport,
+  deleteSavedList,
   getProject,
   getProjects,
   getReport,
+  getSavedLists,
   saveDrawing,
+  saveList,
   saveProject,
   saveReport,
 } from '../db';
@@ -29,6 +32,7 @@ function normalizeDrawings(r: Report): DrawingState[] {
  *  date/time and the bundled sample drawing. Used to discard untouched reports. */
 function isReportEmpty(r: Report, template: Template): boolean {
   if (r.reportTitle && r.reportTitle.trim()) return false;
+  if (r.attachments && r.attachments.length) return false; // uploaded a document
   for (const f of template.fields) {
     const v = r.values[f.key];
     if (f.type === 'date' || f.type === 'time') continue; // auto-filled
@@ -60,6 +64,7 @@ export default function ReportEditor({ reportId, onBack }: Props) {
   const [report, setReport] = useState<Report | null>(null);
   const [template, setTemplate] = useState<Template | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [savedLists, setSavedLists] = useState<SavedList[]>([]);
   const [savedNote, setSavedNote] = useState('');
   const [exportState, setExportState] = useState<{ bytes: Uint8Array; name: string } | null>(null);
   const [generating, setGenerating] = useState(false);
@@ -92,13 +97,27 @@ export default function ReportEditor({ reportId, onBack }: Props) {
       setActiveIdx(0);
       setTemplate((await getTemplateById(r.templateId)) ?? null);
       setProjects(await getProjects());
+      setSavedLists(await getSavedLists());
     })();
   }, [reportId]);
 
-  const adminKeys = useMemo(
-    () => (template ? template.fields.filter((f) => f.autofill === 'project').map((f) => f.key) : []),
+  // Save the current rows of a table field as a named, reusable list.
+  const handleSaveList = async (fieldKey: string, name: string, rows: TableRow[]) => {
+    await saveList({ id: uid('list_'), fieldKey, name, rows, createdAt: Date.now() });
+    setSavedLists(await getSavedLists());
+    setSavedNote(`Saved list "${name}".`);
+  };
+
+  const handleDeleteList = async (id: string) => {
+    await deleteSavedList(id);
+    setSavedLists(await getSavedLists());
+  };
+
+  const adminFields = useMemo(
+    () => (template ? template.fields.filter((f) => f.autofill === 'project') : []),
     [template],
   );
+  const adminKeys = useMemo(() => adminFields.map((f) => f.key), [adminFields]);
 
   // autosave (debounced). All mutations flow through here and update reportRef
   // synchronously so stale child callbacks still merge into the latest report.
@@ -181,6 +200,38 @@ export default function ReportEditor({ reportId, onBack }: Props) {
     const drawings = cur.drawings.filter((_, idx) => idx !== i);
     persist({ ...cur, drawings, updatedAt: Date.now() });
     setActiveIdx((a) => Math.max(0, Math.min(a, drawings.length - 1)));
+  };
+
+  // Upload supporting documents (PTPs, toolbox talks). PDFs and images are
+  // stored as data URLs and included in the export before the drawings.
+  const addAttachments = async (files: File[]) => {
+    const cur = reportRef.current;
+    if (!cur) return;
+    const read = (file: File) =>
+      new Promise<Attachment>((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () =>
+          resolve({ id: uid('att_'), name: file.name, type: file.type || 'application/octet-stream', dataUrl: String(r.result) });
+        r.onerror = () => reject(r.error);
+        r.readAsDataURL(file);
+      });
+    const added: Attachment[] = [];
+    for (const f of files) {
+      try {
+        added.push(await read(f));
+      } catch {
+        /* skip unreadable file */
+      }
+    }
+    const latest = reportRef.current;
+    if (!latest) return;
+    persist({ ...latest, attachments: [...(latest.attachments ?? []), ...added], updatedAt: Date.now() });
+  };
+
+  const removeAttachment = (id: string) => {
+    const cur = reportRef.current;
+    if (!cur) return;
+    persist({ ...cur, attachments: (cur.attachments ?? []).filter((a) => a.id !== id), updatedAt: Date.now() });
   };
 
   const applyProjectAdmin = async (p: Project) => {
@@ -350,8 +401,8 @@ export default function ReportEditor({ reportId, onBack }: Props) {
         <div className="spacer" style={{ flex: 1 }}>
           <strong>Save admin data to autofill later?</strong>
           <div className="hint">
-            Stores Project Name, Job Number, General Contractor, and Project Manager
-            for this job so every form autofills them automatically.
+            Stores {adminFields.map((f) => f.label).join(', ')} for this job so
+            future reports autofill them automatically.
           </div>
         </div>
         <button className="btn sm primary" onClick={saveAdminData}>
@@ -362,7 +413,62 @@ export default function ReportEditor({ reportId, onBack }: Props) {
       {savedNote && <p className="hint">{savedNote}</p>}
 
       {/* Schema-driven form */}
-      <FormFields template={template} values={report.values} onChange={setValue} errorKeys={errorKeys} />
+      <FormFields
+        template={template}
+        values={report.values}
+        onChange={setValue}
+        errorKeys={errorKeys}
+        savedLists={savedLists}
+        onSaveList={handleSaveList}
+        onDeleteList={handleDeleteList}
+      />
+
+      {/* Attachments — PTPs, toolbox talks, etc. (added to the PDF before plans) */}
+      <div className="card">
+        <div className="section-title">Attachments (PTPs, Toolbox Talks, etc.)</div>
+        <div className="row" style={{ marginBottom: 10 }}>
+          <label className="btn sm navy">
+            + Upload attachments
+            <input
+              type="file"
+              accept="application/pdf,image/*"
+              multiple
+              style={{ display: 'none' }}
+              onChange={(e) => {
+                const files = Array.from(e.target.files ?? []);
+                if (files.length) void addAttachments(files);
+                e.currentTarget.value = '';
+              }}
+            />
+          </label>
+        </div>
+        {(report.attachments ?? []).length === 0 ? (
+          <p className="hint">
+            Upload PDFs or images (PTPs, toolbox talks, permits…). They are added to the
+            exported PDF right after the report page and before the marked-up plans.
+          </p>
+        ) : (
+          <div>
+            {(report.attachments ?? []).map((a) => (
+              <div className="list-item" key={a.id}>
+                <div className="meta">
+                  <div className="name">
+                    {a.type.includes('pdf') ? '📄' : '🖼️'} {a.name}
+                  </div>
+                  <div className="sub">{a.type.includes('pdf') ? 'PDF' : 'Image'}</div>
+                </div>
+                <button
+                  className="btn sm danger"
+                  title="Remove attachment"
+                  onClick={() => removeAttachment(a.id)}
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Drawing markup — one or more pages */}
       <div className="card">

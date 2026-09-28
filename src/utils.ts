@@ -1,5 +1,48 @@
 // Small shared helpers.
 
+interface SaveFilePickerOptions {
+  suggestedName?: string;
+  id?: string;
+  startIn?: string;
+  types?: { description?: string; accept: Record<string, string[]> }[];
+}
+type ShowSaveFilePicker = (opts?: SaveFilePickerOptions) => Promise<FileSystemFileHandle>;
+
+/**
+ * Save a Blob, letting the user choose the folder + filename when the browser
+ * supports it (desktop Chromium/Edge via the File System Access API). Passing a
+ * stable `id` makes the browser reopen the picker in the last-used folder, so
+ * the location is remembered across saves and sessions. Where the picker isn't
+ * available (iPad Safari, Firefox), it falls back to a normal download.
+ *
+ * Returns 'saved' (chosen location), 'downloaded' (fallback), or 'cancelled'.
+ */
+export async function saveFileWithPicker(
+  blob: Blob,
+  suggestedName: string,
+): Promise<'saved' | 'downloaded' | 'cancelled'> {
+  const picker = (window as unknown as { showSaveFilePicker?: ShowSaveFilePicker }).showSaveFilePicker;
+  if (typeof picker === 'function') {
+    try {
+      const handle = await picker({
+        suggestedName,
+        id: 'qc-report-save', // Chromium remembers the folder per id
+        startIn: 'documents',
+        types: [{ description: 'PDF document', accept: { 'application/pdf': ['.pdf'] } }],
+      });
+      const writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      return 'saved';
+    } catch (e) {
+      // User dismissed the dialog → do nothing; other errors → fall back.
+      if (e instanceof DOMException && e.name === 'AbortError') return 'cancelled';
+    }
+  }
+  downloadBlob(blob, suggestedName);
+  return 'downloaded';
+}
+
 /** Trigger a browser download of a Blob under the given filename. */
 export function downloadBlob(blob: Blob, name: string): void {
   const url = URL.createObjectURL(blob);
@@ -48,6 +91,11 @@ export function todayISO(): string {
   const d = new Date();
   const p = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+/** Full weekday name for today, e.g. "Monday". Autofilled like the date. */
+export function todayWeekday(): string {
+  return new Date().toLocaleDateString(undefined, { weekday: 'long' });
 }
 
 /** HH:MM (24h) for <input type="time"> */

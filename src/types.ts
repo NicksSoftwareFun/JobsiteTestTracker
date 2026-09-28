@@ -27,7 +27,7 @@ export type TableRow = Record<string, string>;
 export type AutofillGroup = 'project' | 'perTest';
 
 /** Auto-populated default for a new report. */
-export type DefaultValue = 'today' | 'now' | null;
+export type DefaultValue = 'today' | 'now' | 'weekday' | null;
 
 export interface FieldDef {
   key: string;
@@ -87,6 +87,30 @@ export interface DrawingState {
   fabricJson: unknown | null;
 }
 
+/** An uploaded supporting document (PTP, toolbox talk, etc.) included in the
+ *  exported PDF between the main report page and the marked-up plans. Stored as
+ *  a data URL so it round-trips through IndexedDB and the backup file. */
+export interface Attachment {
+  id: string;
+  name: string;
+  /** MIME type, e.g. 'application/pdf' or 'image/png' */
+  type: string;
+  /** base64 data URL of the file contents */
+  dataUrl: string;
+}
+
+/** A reusable, named set of table rows (e.g. a labor crew roster or a
+ *  subcontractor list) saved to the on-device library. Keyed by the table
+ *  field it belongs to so each table has its own independent library. */
+export interface SavedList {
+  id: string;
+  /** the table field key this list is for, e.g. 'warwickLabor' */
+  fieldKey: string;
+  name: string;
+  rows: TableRow[];
+  createdAt: number;
+}
+
 /** A reusable drawing page saved to the on-device library (like a template). */
 export interface SavedDrawing {
   id: string;
@@ -106,6 +130,9 @@ export interface Report {
   values: Record<string, FieldValue>;
   /** user-editable title suffix; display = "<templateName> - <reportTitle>" */
   reportTitle?: string;
+  /** uploaded supporting documents (PTPs, toolbox talks) — included in the PDF
+   *  between the main page and the drawings */
+  attachments?: Attachment[];
   /** one or more markup-able drawing pages */
   drawings: DrawingState[];
   /** legacy single-drawing field (migrated into `drawings` on load) */

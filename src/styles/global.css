@@ -432,9 +432,18 @@ select.text-input {
 .btn.block {
   width: 100%;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   text-align: center;
+  gap: 2px;
+}
+/* small device hint under a split action button (e.g. "iPad / iPhone") */
+.btn-cap {
+  font-size: 11px;
+  font-weight: 400;
+  opacity: 0.85;
+  line-height: 1.2;
 }
 .btn.disabled {
   opacity: 0.5;

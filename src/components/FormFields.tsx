@@ -1,4 +1,4 @@
-import type { CheckboxPairValue, FieldDef, FieldValue, TableRow, Template } from '../types';
+import type { CheckboxPairValue, FieldDef, FieldValue, SavedList, TableRow, Template } from '../types';
 import SignaturePad from './SignaturePad';
 import PhotoField from './PhotoField';
 import TableField from './TableField';
@@ -12,9 +12,21 @@ interface Props {
   onChange: (key: string, value: FieldValue) => void;
   /** field keys flagged as missing/required (highlighted red) */
   errorKeys?: Set<string>;
+  /** saved named lists (for table fields), keyed handlers below */
+  savedLists?: SavedList[];
+  onSaveList?: (fieldKey: string, name: string, rows: TableRow[]) => void;
+  onDeleteList?: (id: string) => void;
 }
 
-export default function FormFields({ template, values, onChange, errorKeys }: Props) {
+export default function FormFields({
+  template,
+  values,
+  onChange,
+  errorKeys,
+  savedLists,
+  onSaveList,
+  onDeleteList,
+}: Props) {
   return (
     <>
       {template.sections.map((section) => (
@@ -30,6 +42,9 @@ export default function FormFields({ template, values, onChange, errorKeys }: Pr
                 value={values[key]}
                 error={errorKeys?.has(key)}
                 onChange={(v) => onChange(key, v)}
+                savedLists={savedLists?.filter((l) => l.fieldKey === key)}
+                onSaveList={onSaveList ? (name, rows) => onSaveList(key, name, rows) : undefined}
+                onDeleteList={onDeleteList}
               />
             );
           })}
@@ -44,11 +59,17 @@ function FieldControl({
   value,
   error,
   onChange,
+  savedLists,
+  onSaveList,
+  onDeleteList,
 }: {
   field: FieldDef;
   value: FieldValue;
   error?: boolean;
   onChange: (v: FieldValue) => void;
+  savedLists?: SavedList[];
+  onSaveList?: (name: string, rows: TableRow[]) => void;
+  onDeleteList?: (id: string) => void;
 }) {
   const cls = `field${error ? ' field-error' : ''}`;
   const req = field.required ? <span className="req"> *</span> : null;
@@ -137,6 +158,9 @@ function FieldControl({
           columns={field.columns}
           value={value as TableRow[] | undefined}
           onChange={(rows) => onChange(rows)}
+          savedLists={savedLists}
+          onSaveList={onSaveList}
+          onDeleteList={onDeleteList}
         />
       );
     default:

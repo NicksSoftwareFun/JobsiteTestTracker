@@ -11,7 +11,7 @@ import {
 } from './db';
 import { getAllTemplates, getTemplateById } from './templates';
 import { getReport } from './db';
-import { todayISO, nowTime, uid } from './utils';
+import { todayISO, nowTime, todayWeekday, uid } from './utils';
 import { renderDrawingUrl } from './pdf/renderDrawing';
 import { buildReportPdf } from './pdf/report';
 import Home from './components/Home';
@@ -81,6 +81,7 @@ export default function App() {
     for (const f of template.fields) {
       if (f.default === 'today') values[f.key] = todayISO();
       else if (f.default === 'now') values[f.key] = nowTime();
+      else if (f.default === 'weekday') values[f.key] = todayWeekday();
     }
     // Bundle the sample drawing so the app is testable immediately.
     const drawings: Report['drawings'] = [];
@@ -127,6 +128,7 @@ export default function App() {
       else if (f.type === 'photos') values[f.key] = [];
       else if (f.default === 'today') values[f.key] = todayISO();
       else if (f.default === 'now') values[f.key] = nowTime();
+      else if (f.default === 'weekday') values[f.key] = todayWeekday();
     }
     const report: Report = {
       ...orig,
