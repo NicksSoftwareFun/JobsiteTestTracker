@@ -50,10 +50,13 @@ jobs:
           Serve over HTTPS for install/offline and the OneDrive share feature.
           TXT
           cd dist && zip -r "../warwick-qc-site-$TAG.zip" .
-      - name: Create GitHub release
+      - name: Create or update GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # Remove any existing release + tag for this version so re-running the
+          # workflow updates the release in place with the latest build.
+          gh release delete "$TAG" --yes --cleanup-tag || true
           gh release create "$TAG" "warwick-qc-site-$TAG.zip" \
             --title "Warwick QC Test Reports $TAG" \
             --notes "Downloadable build of the QC Test Reports site. Unzip and host the folder on any static web server (or add to an iPad home screen via Safari). See HOW-TO-RUN.txt inside the zip. Opening index.html directly from disk may not work; serve the folder instead." \
