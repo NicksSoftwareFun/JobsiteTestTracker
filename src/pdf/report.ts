@@ -14,7 +14,13 @@ export async function buildReportPdf(
     if (d.backgroundDataUrl) drawingImages.push(await compositeDrawing(d));
   }
   const photosPerPage = Number(localStorage.getItem('qc-photosPerPage')) || 2;
-  const bytes = await generateReportPdf({ template, report, drawingImages, photosPerPage });
+  const bytes = await generateReportPdf({
+    template,
+    report,
+    drawingImages,
+    attachments: report.attachments ?? [],
+    photosPerPage,
+  });
   const name = safeFileName(reportDisplayName(template.name, report.reportTitle)) + '.pdf';
   return { bytes, name };
 }

@@ -6,7 +6,7 @@
 // Being schema-driven means custom templates render through the same path.
 
 import { PDFDocument, StandardFonts, rgb, type PDFFont } from 'pdf-lib';
-import type { CheckboxPairValue, DrawingState, PhotoItem, Report, TableRow, Template } from '../types';
+import type { Attachment, CheckboxPairValue, DrawingState, PhotoItem, Report, TableRow, Template } from '../types';
 import { displayDate, displayTime, normalizePhotos, reportDisplayName } from '../utils';
 import logoUrl from '../assets/warwick-logo.png';
 
@@ -60,6 +60,8 @@ export interface GenerateArgs {
   report: Report;
   /** each drawing page (background + markup) composited to a PNG data URL */
   drawingImages?: string[];
+  /** uploaded supporting documents, inserted before the drawings */
+  attachments?: Attachment[];
   /** how many photos per page in the export (1, 2, or 4) */
   photosPerPage?: number;
 }
@@ -68,6 +70,7 @@ export async function generateReportPdf({
   template,
   report,
   drawingImages = [],
+  attachments = [],
   photosPerPage = 2,
 }: GenerateArgs): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
@@ -309,6 +312,29 @@ export async function generateReportPdf({
     }
   }
 
+  // Uploaded attachments (PTPs, toolbox talks, etc.) go right after the main
+  // report page(s) and before the marked-up drawings. PDFs keep their real
+  // vector pages; images render one per page.
+  for (const att of attachments) {
+    try {
+      if (att.type.includes('pdf')) {
+        const src = await PDFDocument.load(att.dataUrl);
+        const copied = await doc.copyPages(src, src.getPageIndices());
+        copied.forEach((p) => doc.addPage(p));
+      } else if (att.type.startsWith('image/')) {
+        await addImageAttachmentPage(doc, bold, att.dataUrl, att.name);
+      } else {
+        addAttachmentNotePage(doc, bold, `Attachment "${att.name}" (${att.type}) could not be embedded.`);
+      }
+    } catch {
+      addAttachmentNotePage(
+        doc,
+        bold,
+        `Attachment "${att.name}" could not be embedded — it may be password-protected.`,
+      );
+    }
+  }
+
   // One page per marked-up drawing.
   for (let i = 0; i < drawingImages.length; i++) {
     const label =
@@ -354,6 +380,42 @@ async function addDrawingPage(doc: PDFDocument, bold: PDFFont, dataUrl: string, 
   const w = png.width * scale;
   const h = png.height * scale;
   page.drawImage(png, { x: (pw - w) / 2, y: (ph - topPad - h) / 2, width: w, height: h });
+}
+
+/** Render an image attachment on its own page, labeled with its file name. */
+async function addImageAttachmentPage(doc: PDFDocument, bold: PDFFont, dataUrl: string, name: string) {
+  const img = dataUrl.startsWith('data:image/png') ? await doc.embedPng(dataUrl) : await doc.embedJpg(dataUrl);
+  const landscape = img.width >= img.height;
+  const pw = landscape ? PAGE_H : PAGE_W;
+  const ph = landscape ? PAGE_W : PAGE_H;
+  const page = doc.addPage([pw, ph]);
+  const topPad = 40;
+  page.drawText(ellipsize(`ATTACHMENT — ${name}`, bold, 11, pw - MARGIN * 2), {
+    x: MARGIN,
+    y: ph - 28,
+    size: 11,
+    font: bold,
+    color: NAVY,
+  });
+  const availW = pw - MARGIN * 2;
+  const availH = ph - MARGIN - topPad;
+  const scale = Math.min(availW / img.width, availH / img.height);
+  const w = img.width * scale;
+  const h = img.height * scale;
+  page.drawImage(img, { x: (pw - w) / 2, y: (ph - topPad - h) / 2, width: w, height: h });
+}
+
+/** Placeholder page when an attachment can't be embedded (e.g. encrypted PDF). */
+function addAttachmentNotePage(doc: PDFDocument, bold: PDFFont, message: string) {
+  const page = doc.addPage([PAGE_W, PAGE_H]);
+  page.drawText('ATTACHMENT', { x: MARGIN, y: PAGE_H - 28, size: 11, font: bold, color: NAVY });
+  page.drawText(ellipsize(message, bold, 11, PAGE_W - MARGIN * 2), {
+    x: MARGIN,
+    y: PAGE_H - 60,
+    size: 11,
+    font: bold,
+    color: rgb(0.55, 0.2, 0.2),
+  });
 }
 
 /** Lay attached photos out at 1, 2, or 4 per page, with optional captions. */
