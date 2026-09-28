@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { appendReportToLog } from '../pdf/appendToLog';
+import { saveFileWithPicker } from '../utils';
 
 // User story 3: after generating the combined report PDF, choose a destination —
 // upload/share to OneDrive (iOS share sheet), append onto an existing PDF test
@@ -45,6 +46,9 @@ function canShareFiles(file: File): boolean {
 export default function ExportDialog({ pdfBytes, fileName, onClose }: Props) {
   const [status, setStatus] = useState<string>('');
   const [busy, setBusy] = useState(false);
+  // Touch devices (iPad/iPhone) → Share/OneDrive; computers → Save to File.
+  const isTouch =
+    typeof window !== 'undefined' && !!window.matchMedia?.('(pointer: coarse)').matches;
   // Result of merging this report into a chosen log, awaiting a Share/Save tap.
   const [mergedLog, setMergedLog] = useState<{ bytes: Uint8Array; name: string } | null>(null);
 
@@ -74,9 +78,12 @@ export default function ExportDialog({ pdfBytes, fileName, onClose }: Props) {
   const shareReport = () =>
     shareOrDownload(pdfBytes, fileName, 'Shared. Choose OneDrive (or Files → OneDrive) in the share sheet.');
 
-  const saveToFiles = () => {
-    downloadBlob(bytesToBlob(pdfBytes), fileName);
-    setStatus('Saved. In the download/Files prompt, pick your OneDrive folder.');
+  const saveToFiles = async () => {
+    const res = await saveFileWithPicker(bytesToBlob(pdfBytes), fileName);
+    if (res === 'saved') setStatus('Saved to the folder you chose.');
+    else if (res === 'downloaded')
+      setStatus('Saved. In the download/Files prompt, pick your folder (e.g. OneDrive).');
+    // 'cancelled' → leave the dialog as-is
   };
 
   // Step 1 of append: read + merge (async). Does NOT share (gesture would be gone).
@@ -127,10 +134,10 @@ export default function ExportDialog({ pdfBytes, fileName, onClose }: Props) {
     );
     onClose();
   };
-  const saveCombined = () => {
+  const saveCombined = async () => {
     if (!mergedLog) return;
-    downloadBlob(bytesToBlob(mergedLog.bytes), mergedLog.name);
-    onClose();
+    const res = await saveFileWithPicker(bytesToBlob(mergedLog.bytes), mergedLog.name);
+    if (res !== 'cancelled') onClose();
   };
 
   return (
@@ -145,12 +152,18 @@ export default function ExportDialog({ pdfBytes, fileName, onClose }: Props) {
           {/* Save THIS report: one split row of two equal actions */}
           <div className="card">
             <h3>Save this report</h3>
+            <p className="hint">
+              On <strong>iPad / iPhone</strong>, use <strong>Share / OneDrive</strong>. On a{' '}
+              <strong>computer</strong>, use <strong>Save to File</strong>.
+            </p>
             <div className="btn-split">
               <button className="btn primary block" onClick={shareReport} disabled={busy}>
-                Share / OneDrive
+                📱 Share / OneDrive
+                <span className="btn-cap">iPad / iPhone{isTouch ? ' — recommended' : ''}</span>
               </button>
               <button className="btn navy block" onClick={saveToFiles} disabled={busy}>
-                Save to File
+                💻 Save to File
+                <span className="btn-cap">Computer{!isTouch ? ' — recommended' : ''}</span>
               </button>
             </div>
           </div>
@@ -199,10 +212,12 @@ export default function ExportDialog({ pdfBytes, fileName, onClose }: Props) {
             </p>
             <div className="btn-split">
               <button className="btn primary block" onClick={shareCombined} disabled={busy}>
-                Share / OneDrive
+                📱 Share / OneDrive
+                <span className="btn-cap">iPad / iPhone{isTouch ? ' — recommended' : ''}</span>
               </button>
               <button className="btn navy block" onClick={saveCombined} disabled={busy}>
-                Save to File
+                💻 Save to File
+                <span className="btn-cap">Computer{!isTouch ? ' — recommended' : ''}</span>
               </button>
             </div>
             <div className="row" style={{ justifyContent: 'flex-end', marginTop: 14 }}>
