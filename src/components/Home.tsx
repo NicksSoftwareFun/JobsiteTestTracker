@@ -31,6 +31,26 @@ interface Props {
 
 type StatusFilter = 'all' | 'draft' | 'completed';
 
+// "Give Feedback" opens the device's default mail app with a prefilled message
+// addressed to the developer.
+const FEEDBACK_EMAIL = 'nvanriper@wphcorp.com';
+const FEEDBACK_SUBJECT = 'Warwick QC Test Reports — Feedback';
+const FEEDBACK_BODY = [
+  'Thanks for trying the Warwick QC Test Reports app. Please share your feedback below:',
+  '',
+  'What works well:',
+  '',
+  'What could be improved / bugs:',
+  '',
+  'Feature requests:',
+  '',
+  '',
+  '(Device / iPad model, if relevant:)',
+].join('\n');
+const feedbackMailto = `mailto:${FEEDBACK_EMAIL}?subject=${encodeURIComponent(
+  FEEDBACK_SUBJECT,
+)}&body=${encodeURIComponent(FEEDBACK_BODY)}`;
+
 export default function Home({
   reports,
   templates,
@@ -202,13 +222,17 @@ export default function Home({
         </div>
       </div>
 
-      <div className="row" style={{ marginBottom: 16 }}>
+      <div className="row" style={{ marginBottom: 16, alignItems: 'center' }}>
         <button className="btn primary" onClick={() => setPicking(true)}>
           + New Report
         </button>
         <button className="btn" onClick={onNewTemplate}>
           + New Template
         </button>
+        <span className="spacer" style={{ flex: 1 }} />
+        <a className="btn ghost sm" href={feedbackMailto} title="Email feedback to the developer">
+          ✉ Give Feedback
+        </a>
       </div>
 
       <div className="card">
