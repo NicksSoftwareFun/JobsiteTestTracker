@@ -12,13 +12,11 @@ import {
 import { getAllTemplates, getTemplateById } from './templates';
 import { getReport } from './db';
 import { todayISO, nowTime, todayWeekday, uid } from './utils';
-import { renderDrawingUrl } from './pdf/renderDrawing';
 import { buildReportPdf } from './pdf/report';
 import Home from './components/Home';
 import ReportEditor from './components/ReportEditor';
 import TemplateBuilder from './components/TemplateBuilder';
 import ExportDialog from './components/ExportDialog';
-import sampleDrawingUrl from './data/sample-drawing.png';
 
 type View =
   | { name: 'home' }
@@ -83,21 +81,8 @@ export default function App() {
       else if (f.default === 'now') values[f.key] = nowTime();
       else if (f.default === 'weekday') values[f.key] = todayWeekday();
     }
-    // Bundle the sample drawing so the app is testable immediately.
+    // New reports start with no drawings; the foreman adds plan pages as needed.
     const drawings: Report['drawings'] = [];
-    try {
-      const rendered = await renderDrawingUrl(sampleDrawingUrl);
-      drawings.push({
-        id: uid('dr_'),
-        name: 'Sample drawing',
-        backgroundDataUrl: rendered.dataUrl,
-        bgWidth: rendered.width,
-        bgHeight: rendered.height,
-        fabricJson: null,
-      });
-    } catch {
-      /* sample optional */
-    }
     const report: Report = {
       id: uid('rep_'),
       templateId: template.id,

@@ -11,7 +11,12 @@ export async function buildReportPdf(
 ): Promise<{ bytes: Uint8Array; name: string }> {
   const drawingImages: string[] = [];
   for (const d of report.drawings ?? []) {
-    if (d.backgroundDataUrl) drawingImages.push(await compositeDrawing(d));
+    // Skip the test-only "Sample drawing" that older reports may still carry,
+    // unless it was actually marked up.
+    const markup = d.fabricJson as { objects?: unknown[] } | null;
+    const isUntouchedSample =
+      d.name === 'Sample drawing' && !(markup && Array.isArray(markup.objects) && markup.objects.length);
+    if (d.backgroundDataUrl && !isUntouchedSample) drawingImages.push(await compositeDrawing(d));
   }
   const photosPerPage = Number(localStorage.getItem('qc-photosPerPage')) || 2;
   const bytes = await generateReportPdf({
