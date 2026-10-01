@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { appendReportToLog } from '../pdf/appendToLog';
-import { saveFileWithPicker } from '../utils';
+import { downloadBlob, saveFileWithPicker, type SaveResult } from '../utils';
 
 // User story 3: after generating the combined report PDF, choose a destination —
 // upload/share to OneDrive (iOS share sheet), append onto an existing PDF test
@@ -22,17 +22,6 @@ function bytesToBlob(bytes: Uint8Array): Blob {
   // Copy into a fresh ArrayBuffer so the Blob is backed by a plain ArrayBuffer.
   const copy = new Uint8Array(bytes);
   return new Blob([copy], { type: 'application/pdf' });
-}
-
-function downloadBlob(blob: Blob, name: string) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = name;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 
 function canShareFiles(file: File): boolean {
@@ -78,13 +67,25 @@ export default function ExportDialog({ pdfBytes, fileName, onClose }: Props) {
   const shareReport = () =>
     shareOrDownload(pdfBytes, fileName, 'Shared. Choose OneDrive (or Files → OneDrive) in the share sheet.');
 
-  const saveToFiles = async () => {
-    const res = await saveFileWithPicker(bytesToBlob(pdfBytes), fileName);
-    if (res === 'saved') setStatus('Saved to the folder you chose.');
-    else if (res === 'downloaded')
-      setStatus('Saved. In the download/Files prompt, pick your folder (e.g. OneDrive).');
-    // 'cancelled' → leave the dialog as-is
+  // Save via the folder picker (computers) and report exactly what happened.
+  const saveWithPicker = async (bytes: Uint8Array, name: string): Promise<SaveResult | 'error'> => {
+    try {
+      const res = await saveFileWithPicker(bytesToBlob(bytes), name);
+      if (res === 'saved') setStatus(`Saved "${name}" to the folder you chose.`);
+      else if (res === 'downloaded')
+        setStatus('Saved. In the download/Files prompt, pick your folder (e.g. OneDrive).');
+      else if (res === 'fallback')
+        setStatus(
+          `Couldn't write to the folder you picked (it may be syncing to OneDrive or open in another app), so "${name}" was saved to your Downloads folder instead. Move it from there.`,
+        );
+      return res;
+    } catch (e) {
+      setStatus(e instanceof Error ? e.message : String(e));
+      return 'error';
+    }
   };
+
+  const saveToFiles = () => void saveWithPicker(pdfBytes, fileName);
 
   // Step 1 of append: read + merge (async). Does NOT share (gesture would be gone).
   const mergeWithLog = async (file: File) => {
@@ -136,8 +137,9 @@ export default function ExportDialog({ pdfBytes, fileName, onClose }: Props) {
   };
   const saveCombined = async () => {
     if (!mergedLog) return;
-    const res = await saveFileWithPicker(bytesToBlob(mergedLog.bytes), mergedLog.name);
-    if (res !== 'cancelled') onClose();
+    const res = await saveWithPicker(mergedLog.bytes, mergedLog.name);
+    if (res === 'saved' || res === 'downloaded') onClose();
+    else if (res !== 'cancelled') setMergedLog(null); // keep the main dialog open to show the message
   };
 
   return (

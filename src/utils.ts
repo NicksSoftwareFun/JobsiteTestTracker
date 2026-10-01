@@ -8,6 +8,8 @@ interface SaveFilePickerOptions {
 }
 type ShowSaveFilePicker = (opts?: SaveFilePickerOptions) => Promise<FileSystemFileHandle>;
 
+export type SaveResult = 'saved' | 'downloaded' | 'fallback' | 'cancelled';
+
 /**
  * Save a Blob, letting the user choose the folder + filename when the browser
  * supports it (desktop Chromium/Edge via the File System Access API). Passing a
@@ -15,32 +17,55 @@ type ShowSaveFilePicker = (opts?: SaveFilePickerOptions) => Promise<FileSystemFi
  * the location is remembered across saves and sessions. Where the picker isn't
  * available (iPad Safari, Firefox), it falls back to a normal download.
  *
- * Returns 'saved' (chosen location), 'downloaded' (fallback), or 'cancelled'.
+ * The browser creates the (empty) file as soon as a location is picked, so a
+ * failed write would otherwise leave a 0 KB file behind. Writes are retried
+ * (cloud-sync clients like OneDrive or antivirus can briefly lock a new file)
+ * and verified by size; if they still fail, the empty file is removed where
+ * possible and the PDF goes to Downloads instead ('fallback').
  */
-export async function saveFileWithPicker(
-  blob: Blob,
-  suggestedName: string,
-): Promise<'saved' | 'downloaded' | 'cancelled'> {
+export async function saveFileWithPicker(blob: Blob, suggestedName: string): Promise<SaveResult> {
+  if (!blob.size) throw new Error('The PDF came out empty, so nothing was saved. Please try again.');
   const picker = (window as unknown as { showSaveFilePicker?: ShowSaveFilePicker }).showSaveFilePicker;
-  if (typeof picker === 'function') {
-    try {
-      const handle = await picker({
-        suggestedName,
-        id: 'qc-report-save', // Chromium remembers the folder per id
-        startIn: 'documents',
-        types: [{ description: 'PDF document', accept: { 'application/pdf': ['.pdf'] } }],
-      });
-      const writable = await handle.createWritable();
-      await writable.write(blob);
-      await writable.close();
-      return 'saved';
-    } catch (e) {
-      // User dismissed the dialog → do nothing; other errors → fall back.
-      if (e instanceof DOMException && e.name === 'AbortError') return 'cancelled';
-    }
+  if (typeof picker !== 'function') {
+    downloadBlob(blob, suggestedName);
+    return 'downloaded';
   }
+
+  let handle: FileSystemFileHandle;
+  try {
+    handle = await picker({
+      suggestedName,
+      id: 'qc-report-save', // Chromium remembers the folder per id
+      startIn: 'documents',
+      types: [{ description: 'PDF document', accept: { 'application/pdf': ['.pdf'] } }],
+    });
+  } catch (e) {
+    // Only a dismissed picker is a real cancel.
+    if (e instanceof DOMException && e.name === 'AbortError') return 'cancelled';
+    downloadBlob(blob, suggestedName);
+    return 'downloaded';
+  }
+
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const writable = await handle.createWritable();
+      try {
+        await writable.write(blob);
+        await writable.close();
+      } catch (err) {
+        await writable.abort().catch(() => {});
+        throw err;
+      }
+      if ((await handle.getFile()).size === blob.size) return 'saved';
+    } catch {
+      /* retry below */
+    }
+    if (attempt < 3) await new Promise((r) => setTimeout(r, 700 * attempt));
+  }
+
+  await (handle as FileSystemFileHandle & { remove?: () => Promise<void> }).remove?.().catch(() => {});
   downloadBlob(blob, suggestedName);
-  return 'downloaded';
+  return 'fallback';
 }
 
 /** Trigger a browser download of a Blob under the given filename. */
@@ -52,7 +77,7 @@ export function downloadBlob(blob: Blob, name: string): void {
   document.body.appendChild(a);
   a.click();
   a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 4000);
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 /** Display name for a report: "<template> - <title>" (title optional). */
