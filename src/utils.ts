@@ -23,7 +23,12 @@ export type SaveResult = 'saved' | 'downloaded' | 'fallback' | 'cancelled';
  * and verified by size; if they still fail, the empty file is removed where
  * possible and the PDF goes to Downloads instead ('fallback').
  */
-export async function saveFileWithPicker(blob: Blob, suggestedName: string): Promise<SaveResult> {
+export async function saveFileWithPicker(
+  blob: Blob,
+  suggestedName: string,
+  /** called once a location is picked and the file is being written */
+  onWriting?: () => void,
+): Promise<SaveResult> {
   if (!blob.size) throw new Error('The PDF came out empty, so nothing was saved. Please try again.');
   const picker = (window as unknown as { showSaveFilePicker?: ShowSaveFilePicker }).showSaveFilePicker;
   if (typeof picker !== 'function') {
@@ -46,6 +51,7 @@ export async function saveFileWithPicker(blob: Blob, suggestedName: string): Pro
     return 'downloaded';
   }
 
+  onWriting?.();
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
       const writable = await handle.createWritable();

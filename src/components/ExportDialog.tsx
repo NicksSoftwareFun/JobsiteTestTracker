@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { appendReportToLog } from '../pdf/appendToLog';
 import { downloadBlob, saveFileWithPicker, type SaveResult } from '../utils';
 
@@ -35,6 +35,21 @@ function canShareFiles(file: File): boolean {
 export default function ExportDialog({ pdfBytes, fileName, onClose }: Props) {
   const [status, setStatus] = useState<string>('');
   const [busy, setBusy] = useState(false);
+  // Message for the blocking "working" overlay (null = idle). While set, the
+  // dialog can't be dismissed, so a save/share can't be interrupted.
+  const [working, setWorking] = useState<string | null>(null);
+  const blocked = busy || working !== null;
+
+  // Warn before closing/reloading the tab mid-save.
+  useEffect(() => {
+    if (!working) return;
+    const warn = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [working]);
   // Touch devices (iPad/iPhone) → Share/OneDrive; computers → Save to File.
   const isTouch =
     typeof window !== 'undefined' && !!window.matchMedia?.('(pointer: coarse)').matches;
@@ -50,6 +65,7 @@ export default function ExportDialog({ pdfBytes, fileName, onClose }: Props) {
       setStatus('Sharing isn\'t available here — the PDF was downloaded. Open it and use "Save to Files → OneDrive".');
       return;
     }
+    setWorking('Waiting for the share sheet to finish…');
     try {
       await (navigator as Navigator).share({ files: [file], title: name });
       setStatus(successMsg);
@@ -61,6 +77,8 @@ export default function ExportDialog({ pdfBytes, fileName, onClose }: Props) {
       // e.g. gesture expired or share unavailable → fall back to a download.
       downloadBlob(blob, name);
       setStatus('Couldn\'t open the share sheet, so the PDF was downloaded — open it and use "Save to Files → OneDrive".');
+    } finally {
+      setWorking(null);
     }
   };
 
@@ -69,8 +87,12 @@ export default function ExportDialog({ pdfBytes, fileName, onClose }: Props) {
 
   // Save via the folder picker (computers) and report exactly what happened.
   const saveWithPicker = async (bytes: Uint8Array, name: string): Promise<SaveResult | 'error'> => {
+    setStatus('');
+    setWorking('Choose where to save the PDF…');
     try {
-      const res = await saveFileWithPicker(bytesToBlob(bytes), name);
+      const res = await saveFileWithPicker(bytesToBlob(bytes), name, () =>
+        setWorking(`Saving "${name}"… please wait.`),
+      );
       if (res === 'saved') setStatus(`Saved "${name}" to the folder you chose.`);
       else if (res === 'downloaded')
         setStatus('Saved. In the download/Files prompt, pick your folder (e.g. OneDrive).');
@@ -82,6 +104,8 @@ export default function ExportDialog({ pdfBytes, fileName, onClose }: Props) {
     } catch (e) {
       setStatus(e instanceof Error ? e.message : String(e));
       return 'error';
+    } finally {
+      setWorking(null);
     }
   };
 
@@ -90,6 +114,7 @@ export default function ExportDialog({ pdfBytes, fileName, onClose }: Props) {
   // Step 1 of append: read + merge (async). Does NOT share (gesture would be gone).
   const mergeWithLog = async (file: File) => {
     setBusy(true);
+    setWorking('Adding this report to the test log…');
     setStatus('');
     setMergedLog(null);
     try {
@@ -122,6 +147,7 @@ export default function ExportDialog({ pdfBytes, fileName, onClose }: Props) {
       );
     } finally {
       setBusy(false);
+      setWorking(null);
     }
   };
 
@@ -144,7 +170,7 @@ export default function ExportDialog({ pdfBytes, fileName, onClose }: Props) {
 
   return (
     <>
-      <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal-backdrop" onClick={() => !blocked && onClose()}>
         <div className="modal" onClick={(e) => e.stopPropagation()}>
           <h2>Save / Send report</h2>
           <p className="hint">
@@ -159,11 +185,11 @@ export default function ExportDialog({ pdfBytes, fileName, onClose }: Props) {
               <strong>computer</strong>, use <strong>Save to File</strong>.
             </p>
             <div className="btn-split">
-              <button className="btn primary block" onClick={shareReport} disabled={busy}>
+              <button className="btn primary block" onClick={shareReport} disabled={blocked}>
                 📱 Share / OneDrive
                 <span className="btn-cap">iPad / iPhone{isTouch ? ' — recommended' : ''}</span>
               </button>
-              <button className="btn navy block" onClick={saveToFiles} disabled={busy}>
+              <button className="btn navy block" onClick={saveToFiles} disabled={blocked}>
                 💻 Save to File
                 <span className="btn-cap">Computer{!isTouch ? ' — recommended' : ''}</span>
               </button>
@@ -177,13 +203,13 @@ export default function ExportDialog({ pdfBytes, fileName, onClose }: Props) {
               Pick your running test-log PDF (from Files/OneDrive). This report's pages
               are added to the end, producing an updated single-source-of-truth log.
             </p>
-            <label className={`btn navy block${busy ? ' disabled' : ''}`}>
+            <label className={`btn navy block${blocked ? ' disabled' : ''}`}>
               {busy ? 'Working…' : 'Choose test log PDF…'}
               <input
                 type="file"
                 accept="application/pdf"
                 style={{ display: 'none' }}
-                disabled={busy}
+                disabled={blocked}
                 onChange={(e) => {
                   const f = e.target.files?.[0];
                   if (f) void mergeWithLog(f);
@@ -196,7 +222,7 @@ export default function ExportDialog({ pdfBytes, fileName, onClose }: Props) {
           {status && <p className="status-note">{status}</p>}
 
           <div className="row" style={{ justifyContent: 'flex-end', marginTop: 8 }}>
-            <button className="btn" onClick={onClose}>
+            <button className="btn" onClick={onClose} disabled={blocked}>
               Done
             </button>
           </div>
@@ -205,7 +231,7 @@ export default function ExportDialog({ pdfBytes, fileName, onClose }: Props) {
 
       {/* Combined-log popup: appears once the append is done */}
       {mergedLog && (
-        <div className="modal-backdrop" onClick={() => setMergedLog(null)}>
+        <div className="modal-backdrop" onClick={() => !blocked && setMergedLog(null)}>
           <div className="modal modal-sm" onClick={(e) => e.stopPropagation()}>
             <h2>Save combined test log</h2>
             <p className="hint">
@@ -213,20 +239,30 @@ export default function ExportDialog({ pdfBytes, fileName, onClose }: Props) {
               <strong>{mergedLog.name}</strong>:
             </p>
             <div className="btn-split">
-              <button className="btn primary block" onClick={shareCombined} disabled={busy}>
+              <button className="btn primary block" onClick={shareCombined} disabled={blocked}>
                 📱 Share / OneDrive
                 <span className="btn-cap">iPad / iPhone{isTouch ? ' — recommended' : ''}</span>
               </button>
-              <button className="btn navy block" onClick={saveCombined} disabled={busy}>
+              <button className="btn navy block" onClick={saveCombined} disabled={blocked}>
                 💻 Save to File
                 <span className="btn-cap">Computer{!isTouch ? ' — recommended' : ''}</span>
               </button>
             </div>
             <div className="row" style={{ justifyContent: 'flex-end', marginTop: 14 }}>
-              <button className="btn danger sm" onClick={() => setMergedLog(null)}>
+              <button className="btn danger sm" onClick={() => setMergedLog(null)} disabled={blocked}>
                 Cancel
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {working && (
+        <div className="working-overlay" role="alertdialog" aria-busy="true" aria-live="assertive">
+          <div className="working-box">
+            <div className="spinner" aria-hidden="true" />
+            <div className="working-msg">{working}</div>
+            <div className="hint">Please don't close this window until it finishes.</div>
           </div>
         </div>
       )}
