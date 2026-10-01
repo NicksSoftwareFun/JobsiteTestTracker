@@ -395,6 +395,10 @@ export default function Home({
         {dataNote && <p className="status-note">{dataNote}</p>}
       </div>
 
+      <p className="hint" style={{ textAlign: 'center', margin: '4px 0 12px' }}>
+        App version: {new Date(__BUILD_TIME__).toLocaleString()} · updates install automatically
+      </p>
+
       {pdfFile && (
         <PdfPagePicker
           file={pdfFile}

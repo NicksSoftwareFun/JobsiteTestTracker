@@ -423,6 +423,57 @@ select.text-input {
   max-width: 420px;
 }
 
+/* Blocking "working" overlay (saving / sharing): sits above every dialog and
+   swallows clicks so the user can't dismiss anything mid-save. */
+.working-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.55);
+  cursor: progress;
+}
+.working-box {
+  background: var(--card);
+  color: var(--text);
+  border-radius: 14px;
+  padding: 24px 22px;
+  width: 100%;
+  max-width: 340px;
+  text-align: center;
+  box-shadow: var(--shadow);
+}
+.working-msg {
+  font-weight: 600;
+  margin: 14px 0 6px;
+  overflow-wrap: anywhere;
+}
+.spinner {
+  width: 46px;
+  height: 46px;
+  margin: 0 auto;
+  border-radius: 50%;
+  border: 5px solid var(--border);
+  border-top-color: var(--spinner, var(--navy));
+  animation: spin 0.9s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation-duration: 2.4s;
+  }
+}
+:root[data-theme='dark'] .spinner {
+  --spinner: var(--accent);
+}
+
 /* Export dialog: equal split-button rows */
 .btn-split {
   display: grid;

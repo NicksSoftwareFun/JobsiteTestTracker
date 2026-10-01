@@ -8,6 +8,8 @@ import { VitePWA } from 'vite-plugin-pwa';
 // that base. Dev/preview stays at root.
 export default defineConfig(({ command }) => ({
   base: command === 'build' ? '/JobsiteTestTracker/' : '/',
+  // Shown on the Home screen so it's easy to confirm which version is running.
+  define: { __BUILD_TIME__: JSON.stringify(new Date().toISOString()) },
   plugins: [
     react(),
     VitePWA({

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Project, Report, SavedDrawing, Template } from './types';
 import {
   deleteReport as dbDeleteReport,
@@ -17,6 +17,7 @@ import Home from './components/Home';
 import ReportEditor from './components/ReportEditor';
 import TemplateBuilder from './components/TemplateBuilder';
 import ExportDialog from './components/ExportDialog';
+import { applyPendingUpdate, setUpdateGuard } from './update';
 
 type View =
   | { name: 'home' }
@@ -71,6 +72,14 @@ export default function App() {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  // App updates reload the page only from the Home screen (never mid-report).
+  const viewRef = useRef(view);
+  viewRef.current = view;
+  useEffect(() => setUpdateGuard(() => viewRef.current.name === 'home'), []);
+  useEffect(() => {
+    if (view.name === 'home' && !shareExport) applyPendingUpdate();
+  }, [view, shareExport]);
 
   const newReport = async (templateId: string) => {
     const template = await getTemplateById(templateId);
