@@ -810,3 +810,52 @@ select.text-input {
 :root[data-theme='dark'] .canvas-holder {
   background: var(--card);
 }
+
+/* Attachments card: drag-and-drop target (computers) */
+.drop-zone {
+  position: relative;
+  transition: outline-color 0.15s, background-color 0.15s;
+  outline: 2px dashed transparent;
+  outline-offset: -6px;
+}
+.drop-zone.dragging {
+  outline-color: var(--navy);
+  background-color: rgba(31, 58, 95, 0.06);
+}
+.drop-overlay {
+  position: absolute;
+  inset: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--navy);
+  background: rgba(255, 255, 255, 0.85);
+  pointer-events: none; /* keep drag events on the card */
+}
+:root[data-theme='dark'] .drop-zone.dragging {
+  outline-color: var(--accent);
+  background-color: rgba(242, 137, 43, 0.08);
+}
+:root[data-theme='dark'] .drop-overlay {
+  color: var(--accent);
+  background: rgba(30, 32, 35, 0.88);
+}
+/* Touch devices (iPad) can't drag files in from a file manager here. */
+@media (pointer: coarse) {
+  .drop-hint {
+    display: none;
+  }
+}
+/* The Photos field sits inside a card; pad it so the drop outline has room. */
+.photo-drop {
+  padding: 8px;
+  margin-left: -8px;
+  margin-right: -8px;
+  border-radius: 10px;
+}
+.photo-drop.dragging {
+  outline-offset: -2px;
+}
