@@ -73,6 +73,24 @@ export default function ReportEditor({ reportId, onBack }: Props) {
   const [activeIdx, setActiveIdx] = useState(0);
   const [pdfPickerFile, setPdfPickerFile] = useState<File | null>(null);
   const [showLibrary, setShowLibrary] = useState(false);
+  // Drag-and-drop onto the Attachments card (computers).
+  const [dragOver, setDragOver] = useState(false);
+  const [dropNote, setDropNote] = useState('');
+  const dragDepth = useRef(0);
+
+  // A file dropped anywhere else on the page would make the browser open it and
+  // navigate away from the report, so swallow stray drops while editing.
+  useEffect(() => {
+    const block = (e: DragEvent) => {
+      if (e.dataTransfer?.types.includes('Files')) e.preventDefault();
+    };
+    window.addEventListener('dragover', block);
+    window.addEventListener('drop', block);
+    return () => {
+      window.removeEventListener('dragover', block);
+      window.removeEventListener('drop', block);
+    };
+  }, []);
   const saveTimer = useRef<number | undefined>(undefined);
   // Always-current report, so callbacks captured by children (e.g. the drawing
   // canvas's fabric event listeners, bound once at mount) merge into the latest
@@ -211,7 +229,7 @@ export default function ReportEditor({ reportId, onBack }: Props) {
       new Promise<Attachment>((resolve, reject) => {
         const r = new FileReader();
         r.onload = () =>
-          resolve({ id: uid('att_'), name: file.name, type: file.type || 'application/octet-stream', dataUrl: String(r.result) });
+          resolve({ id: uid('att_'), name: file.name, type: file.type || (/\.pdf$/i.test(file.name) ? 'application/pdf' : 'application/octet-stream'), dataUrl: String(r.result) });
         r.onerror = () => reject(r.error);
         r.readAsDataURL(file);
       });
@@ -424,7 +442,36 @@ export default function ReportEditor({ reportId, onBack }: Props) {
       />
 
       {/* Attachments — PTPs, toolbox talks, etc. (added to the PDF before plans) */}
-      <div className="card">
+      <div
+        className={`card drop-zone${dragOver ? ' dragging' : ''}`}
+        onDragEnter={(e) => {
+          if (!e.dataTransfer.types.includes('Files')) return;
+          e.preventDefault();
+          dragDepth.current += 1;
+          setDragOver(true);
+        }}
+        onDragOver={(e) => {
+          if (!e.dataTransfer.types.includes('Files')) return;
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'copy';
+        }}
+        onDragLeave={() => {
+          dragDepth.current = Math.max(0, dragDepth.current - 1);
+          if (dragDepth.current === 0) setDragOver(false);
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          dragDepth.current = 0;
+          setDragOver(false);
+          const all = Array.from(e.dataTransfer.files);
+          const ok = all.filter(
+            (f) => f.type === 'application/pdf' || f.type.startsWith('image/') || /\.pdf$/i.test(f.name),
+          );
+          const skipped = all.filter((f) => !ok.includes(f)).map((f) => f.name);
+          setDropNote(skipped.length ? `Skipped (only PDFs and images can be attached): ${skipped.join(', ')}` : '');
+          if (ok.length) void addAttachments(ok);
+        }}
+      >
         <div className="section-title">Attachments (PTPs, Toolbox Talks, etc.)</div>
         <div className="row" style={{ marginBottom: 10 }}>
           <label className="btn sm navy">
@@ -441,7 +488,10 @@ export default function ReportEditor({ reportId, onBack }: Props) {
               }}
             />
           </label>
+          <span className="hint drop-hint">or drag &amp; drop PDFs / images onto this box</span>
         </div>
+        {dragOver && <div className="drop-overlay">Drop files to attach</div>}
+        {dropNote && <p className="status-note">{dropNote}</p>}
         {(report.attachments ?? []).length === 0 ? (
           <p className="hint">
             Upload PDFs or images (PTPs, toolbox talks, permits…). They are added to the
