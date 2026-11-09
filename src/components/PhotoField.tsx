@@ -1,6 +1,7 @@
 import { useRef } from 'react';
 import type { PhotoItem } from '../types';
 import { normalizePhotos } from '../utils';
+import { isImage, useFileDrop } from './useFileDrop';
 
 // Attach photos to a report: choose from the library or (on devices with a
 // camera) take one. Images are downscaled + JPEG-compressed to keep storage
@@ -49,27 +50,37 @@ export default function PhotoField({ value, onChange, label = 'Attach Photos' }:
   const galleryRef = useRef<HTMLInputElement | null>(null);
   const cameraRef = useRef<HTMLInputElement | null>(null);
 
-  const addFiles = async (files: FileList | null) => {
+  const addFiles = async (files: FileList | File[] | null) => {
     if (!files || files.length === 0) return;
     const added: PhotoItem[] = [];
+    const unreadable: string[] = [];
     for (const f of Array.from(files)) {
       try {
         added.push({ src: await compress(f) });
       } catch {
-        /* skip unreadable image */
+        unreadable.push(f.name); // e.g. iPhone HEIC on a Windows browser
       }
     }
     if (added.length) onChange([...photos, ...added]);
+    if (unreadable.length)
+      drop.addDropNote(`Couldn't read ${unreadable.join(', ')} — save it as a JPG or PNG and try again.`);
   };
+
+  const drop = useFileDrop({
+    accept: isImage,
+    acceptsLabel: 'images',
+    onFiles: (files) => void addFiles(files),
+  });
 
   const remove = (i: number) => onChange(photos.filter((_, idx) => idx !== i));
   const setCaption = (i: number, caption: string) =>
     onChange(photos.map((p, idx) => (idx === i ? { ...p, caption } : p)));
 
   return (
-    <div className="field">
+    <div className={`field drop-zone photo-drop${drop.dragOver ? ' dragging' : ''}`} {...drop.dropProps}>
       <label>{label}</label>
-      <div className="row">
+      {drop.dragOver && <div className="drop-overlay">Drop photos to attach</div>}
+      <div className="row" style={{ alignItems: 'center' }}>
         <button className="btn sm" type="button" onClick={() => galleryRef.current?.click()}>
           🖼 Choose Photo
         </button>
@@ -82,7 +93,9 @@ export default function PhotoField({ value, onChange, label = 'Attach Photos' }:
         >
           📷 Take Photo
         </button>
+        <span className="hint drop-hint">or drag &amp; drop photos here</span>
       </div>
+      {drop.dropNote && <p className="status-note">{drop.dropNote}</p>}
       <input
         ref={galleryRef}
         type="file"

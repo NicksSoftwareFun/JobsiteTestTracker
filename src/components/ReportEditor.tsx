@@ -21,6 +21,7 @@ import DrawingCanvas from './DrawingCanvas';
 import ExportDialog from './ExportDialog';
 import PdfPagePicker, { type SelectedPage } from './PdfPagePicker';
 import SavedDrawingsPicker from './SavedDrawingsPicker';
+import { isImage, isPdf, useFileDrop } from './useFileDrop';
 
 /** Migrate legacy single `drawing` into the `drawings` array; ensure ids. */
 function normalizeDrawings(r: Report): DrawingState[] {
@@ -73,10 +74,27 @@ export default function ReportEditor({ reportId, onBack }: Props) {
   const [activeIdx, setActiveIdx] = useState(0);
   const [pdfPickerFile, setPdfPickerFile] = useState<File | null>(null);
   const [showLibrary, setShowLibrary] = useState(false);
-  // Drag-and-drop onto the Attachments card (computers).
-  const [dragOver, setDragOver] = useState(false);
-  const [dropNote, setDropNote] = useState('');
-  const dragDepth = useRef(0);
+  // Drag-and-drop from the computer's file explorer.
+  const attachDrop = useFileDrop({
+    accept: (f) => isPdf(f) || isImage(f),
+    acceptsLabel: 'PDFs and images',
+    onFiles: (files) => void addAttachments(files),
+  });
+  const drawingDrop = useFileDrop({
+    accept: isPdf,
+    acceptsLabel: 'PDFs',
+    onFiles: (files) => {
+      // The page picker handles one PDF at a time.
+      setPdfPickerFile(files[0]);
+      if (files.length > 1)
+        drawingDrop.addDropNote(
+          `Opened "${files[0].name}". Drop the other PDFs one at a time after picking pages: ${files
+            .slice(1)
+            .map((f) => f.name)
+            .join(', ')}`,
+        );
+    },
+  });
 
   // A file dropped anywhere else on the page would make the browser open it and
   // navigate away from the report, so swallow stray drops while editing.
@@ -442,36 +460,7 @@ export default function ReportEditor({ reportId, onBack }: Props) {
       />
 
       {/* Attachments — PTPs, toolbox talks, etc. (added to the PDF before plans) */}
-      <div
-        className={`card drop-zone${dragOver ? ' dragging' : ''}`}
-        onDragEnter={(e) => {
-          if (!e.dataTransfer.types.includes('Files')) return;
-          e.preventDefault();
-          dragDepth.current += 1;
-          setDragOver(true);
-        }}
-        onDragOver={(e) => {
-          if (!e.dataTransfer.types.includes('Files')) return;
-          e.preventDefault();
-          e.dataTransfer.dropEffect = 'copy';
-        }}
-        onDragLeave={() => {
-          dragDepth.current = Math.max(0, dragDepth.current - 1);
-          if (dragDepth.current === 0) setDragOver(false);
-        }}
-        onDrop={(e) => {
-          e.preventDefault();
-          dragDepth.current = 0;
-          setDragOver(false);
-          const all = Array.from(e.dataTransfer.files);
-          const ok = all.filter(
-            (f) => f.type === 'application/pdf' || f.type.startsWith('image/') || /\.pdf$/i.test(f.name),
-          );
-          const skipped = all.filter((f) => !ok.includes(f)).map((f) => f.name);
-          setDropNote(skipped.length ? `Skipped (only PDFs and images can be attached): ${skipped.join(', ')}` : '');
-          if (ok.length) void addAttachments(ok);
-        }}
-      >
+      <div className={`card drop-zone${attachDrop.dragOver ? ' dragging' : ''}`} {...attachDrop.dropProps}>
         <div className="section-title">Attachments (PTPs, Toolbox Talks, etc.)</div>
         <div className="row" style={{ marginBottom: 10 }}>
           <label className="btn sm navy">
@@ -490,8 +479,8 @@ export default function ReportEditor({ reportId, onBack }: Props) {
           </label>
           <span className="hint drop-hint">or drag &amp; drop PDFs / images onto this box</span>
         </div>
-        {dragOver && <div className="drop-overlay">Drop files to attach</div>}
-        {dropNote && <p className="status-note">{dropNote}</p>}
+        {attachDrop.dragOver && <div className="drop-overlay">Drop files to attach</div>}
+        {attachDrop.dropNote && <p className="status-note">{attachDrop.dropNote}</p>}
         {(report.attachments ?? []).length === 0 ? (
           <p className="hint">
             Upload PDFs or images (PTPs, toolbox talks, permits…). They are added to the
@@ -521,7 +510,7 @@ export default function ReportEditor({ reportId, onBack }: Props) {
       </div>
 
       {/* Drawing markup — one or more pages */}
-      <div className="card">
+      <div className={`card drop-zone${drawingDrop.dragOver ? ' dragging' : ''}`} {...drawingDrop.dropProps}>
         <div className="section-title">Tested Area — Drawings</div>
 
         <div className="row" style={{ marginBottom: 10 }}>
@@ -541,7 +530,10 @@ export default function ReportEditor({ reportId, onBack }: Props) {
           <button className="btn sm" onClick={() => setShowLibrary(true)}>
             + Add from saved drawings
           </button>
+          <span className="hint drop-hint">or drag &amp; drop a PDF onto this box</span>
         </div>
+        {drawingDrop.dragOver && <div className="drop-overlay">Drop a PDF to pick pages</div>}
+        {drawingDrop.dropNote && <p className="status-note">{drawingDrop.dropNote}</p>}
 
         {report.drawings.length === 0 ? (
           <p className="hint">
