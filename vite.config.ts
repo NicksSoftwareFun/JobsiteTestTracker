@@ -2,6 +2,10 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
+// One build stamp, used both inside the app (__BUILD_TIME__) and in
+// version.json, which the running app polls to spot a newer release.
+const BUILD_TIME = new Date().toISOString();
+
 // https://vitejs.dev/config/
 // In production the app is served from a GitHub Pages project subpath
 // (https://<user>.github.io/JobsiteTestTracker/), so assets/SW/manifest need
@@ -9,9 +13,15 @@ import { VitePWA } from 'vite-plugin-pwa';
 export default defineConfig(({ command }) => ({
   base: command === 'build' ? '/JobsiteTestTracker/' : '/',
   // Shown on the Home screen so it's easy to confirm which version is running.
-  define: { __BUILD_TIME__: JSON.stringify(new Date().toISOString()) },
+  define: { __BUILD_TIME__: JSON.stringify(BUILD_TIME) },
   plugins: [
     react(),
+    {
+      name: 'emit-version-json',
+      generateBundle() {
+        this.emitFile({ type: 'asset', fileName: 'version.json', source: JSON.stringify({ build: BUILD_TIME }) });
+      },
+    },
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],

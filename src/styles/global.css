@@ -859,3 +859,41 @@ select.text-input {
 .photo-drop.dragging {
   outline-offset: -2px;
 }
+
+/* "New version available" banner, under the top bar on every screen */
+.update-banner {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  padding: 10px 16px;
+  background: #fff4d6;
+  color: #3d2e00;
+  border-bottom: 1px solid #f0d27a;
+}
+.update-banner .update-text {
+  flex: 1 1 220px;
+}
+.update-banner .update-refresh {
+  background: var(--navy);
+  border-color: var(--navy);
+  color: #fff;
+}
+.update-banner .btn.ghost {
+  color: #3d2e00;
+  border-color: rgba(61, 46, 0, 0.35);
+}
+:root[data-theme='dark'] .update-banner {
+  background: #3a3120;
+  color: var(--text);
+  border-bottom-color: #5c4a1f;
+}
+:root[data-theme='dark'] .update-banner .update-refresh {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #1e2023;
+}
+:root[data-theme='dark'] .update-banner .btn.ghost {
+  color: var(--yellow);
+  border-color: rgba(244, 197, 49, 0.6);
+}

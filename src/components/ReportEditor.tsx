@@ -22,6 +22,7 @@ import ExportDialog from './ExportDialog';
 import PdfPagePicker, { type SelectedPage } from './PdfPagePicker';
 import SavedDrawingsPicker from './SavedDrawingsPicker';
 import { isImage, isPdf, useFileDrop } from './useFileDrop';
+import { onBeforeUpdateReload } from '../update';
 
 /** Migrate legacy single `drawing` into the `drawings` array; ensure ids. */
 function normalizeDrawings(r: Report): DrawingState[] {
@@ -114,6 +115,16 @@ export default function ReportEditor({ reportId, onBack }: Props) {
   // canvas's fabric event listeners, bound once at mount) merge into the latest
   // state instead of an old closure.
   const reportRef = useRef<Report | null>(null);
+  // Before an update reload (banner "Refresh now"), write any pending edits
+  // straight away instead of waiting for the debounced autosave.
+  useEffect(
+    () =>
+      onBeforeUpdateReload(async () => {
+        window.clearTimeout(saveTimer.current);
+        if (reportRef.current) await saveReport(reportRef.current);
+      }),
+    [],
+  );
   // Once the user saves, completes, or generates, keep the report even if the
   // field-emptiness check would consider it empty.
   const keepRef = useRef(false);

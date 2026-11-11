@@ -17,7 +17,7 @@ import Home from './components/Home';
 import ReportEditor from './components/ReportEditor';
 import TemplateBuilder from './components/TemplateBuilder';
 import ExportDialog from './components/ExportDialog';
-import { applyPendingUpdate, setUpdateGuard } from './update';
+import { applyPendingUpdate, onUpdateAvailable, refreshToLatest, setUpdateGuard } from './update';
 
 type View =
   | { name: 'home' }
@@ -25,6 +25,8 @@ type View =
   | { name: 'builder'; templateId?: string; keepId?: boolean };
 
 type Theme = 'light' | 'dark';
+
+const REOPEN_KEY = 'qc-reopen-report';
 
 // "Give Feedback" opens the device's default mail app with a prefilled message
 // addressed to the developer. Shown in the top bar on every screen.
@@ -47,7 +49,21 @@ const feedbackMailto = `mailto:${FEEDBACK_EMAIL}?subject=${encodeURIComponent(
 )}&body=${encodeURIComponent(FEEDBACK_BODY)}`;
 
 export default function App() {
-  const [view, setView] = useState<View>({ name: 'home' });
+  // Reopen the report that was open when the user tapped "Refresh" on the
+  // update banner, so applying an update doesn't drop them back on Home.
+  const [view, setView] = useState<View>(() => {
+    try {
+      const id = sessionStorage.getItem(REOPEN_KEY);
+      sessionStorage.removeItem(REOPEN_KEY);
+      if (id) return { name: 'editor', reportId: id };
+    } catch {
+      /* storage unavailable */
+    }
+    return { name: 'home' };
+  });
+  const [updateAvailable, setUpdateAvailable] = useState(false);
+  const [updateDismissed, setUpdateDismissed] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [reports, setReports] = useState<Report[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [savedDrawings, setSavedDrawings] = useState<SavedDrawing[]>([]);
@@ -77,6 +93,24 @@ export default function App() {
   const viewRef = useRef(view);
   viewRef.current = view;
   useEffect(() => setUpdateGuard(() => viewRef.current.name === 'home'), []);
+  useEffect(
+    () =>
+      onUpdateAvailable((avail) => {
+        setUpdateAvailable(avail);
+        if (avail) setUpdateDismissed(false); // a newer find shows the banner again
+      }),
+    [],
+  );
+
+  const refreshNow = async () => {
+    setRefreshing(true);
+    try {
+      if (view.name === 'editor') sessionStorage.setItem(REOPEN_KEY, view.reportId);
+    } catch {
+      /* storage unavailable — they'll land on Home */
+    }
+    await refreshToLatest();
+  };
   useEffect(() => {
     if (view.name === 'home' && !shareExport) applyPendingUpdate();
   }, [view, shareExport]);
@@ -195,6 +229,28 @@ export default function App() {
           </button>
         )}
       </header>
+
+      {updateAvailable && !updateDismissed && (
+        <div className="update-banner" role="status">
+          <span className="update-text">
+            <strong>New version available.</strong>{' '}
+            {view.name === 'editor'
+              ? 'Your report is saved first and reopens after the refresh.'
+              : 'Refresh to get the latest features and fixes.'}
+          </span>
+          <button className="btn sm update-refresh" onClick={refreshNow} disabled={refreshing}>
+            {refreshing ? 'Updating…' : '↻ Refresh now'}
+          </button>
+          <button
+            className="btn ghost sm"
+            onClick={() => setUpdateDismissed(true)}
+            disabled={refreshing}
+            aria-label="Dismiss until later"
+          >
+            Later
+          </button>
+        </div>
+      )}
 
       {view.name === 'home' && (
         <Home
